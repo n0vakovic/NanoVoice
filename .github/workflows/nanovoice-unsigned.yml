@@ -1,0 +1,80 @@
+name: NanoVoice unsigned iPhone build
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nanovoice-unsigned
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 180
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Prepare runner space and toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          xcodebuild -version
+          df -h /
+          # These are disposable hosted-runner tools, never local machine paths.
+          python3 - <<'PY'
+          import os, pathlib, subprocess
+          active = pathlib.Path(os.environ['DEVELOPER_DIR']).resolve().parents[1]
+          for app in pathlib.Path('/Applications').glob('Xcode*.app'):
+              if app.resolve() != active:
+                  subprocess.run(['sudo', 'rm', '-rf', str(app)], check=True)
+          PY
+          if [ -n "${ANDROID_HOME:-}" ]; then sudo rm -rf "$ANDROID_HOME"; fi
+          xcrun simctl runtime delete all || true
+          xcodebuild -downloadComponent MetalToolchain
+          df -h /
+      - name: Prepare unsigned inputs
+        run: |
+          mkdir -p build-input
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          config = json.loads(Path('docs/nanovoice/configuration.example.json').read_text())
+          config.update(api_id='1', api_hash='00000000000000000000000000000000', team_id='0000000000')
+          Path('build-input/ci.json').write_text(json.dumps(config))
+          PY
+          python3 tools/nanovoice/prepare-build.py --configuration build-input/ci.json --unsigned
+      - name: Build unsigned arm64 app
+        run: |
+          set -euo pipefail
+          BAZEL_VERSION=$(python3 -c 'import json; print(json.load(open("versions.json"))["bazel"].split(":")[0])')
+          "build-input/bazel-${BAZEL_VERSION}-darwin-arm64" \
+            --output_user_root="$RUNNER_TEMP/nanovoice-bazel" \
+            build Telegram/Telegram --//Telegram:disableExtensions \
+            --//Telegram:disableProvisioningProfiles --features=disable_legacy_signing \
+            --define="buildNumber=$((1000 + GITHUB_RUN_NUMBER))" \
+            -c dbg --ios_multi_cpus=arm64 --watchos_cpus=arm64_32 \
+            --jobs=2 --local_resources=memory=4096 2>&1 | tee "$RUNNER_TEMP/nanovoice-build.log"
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p "$RUNNER_TEMP/ipa/Payload" artifacts
+          ditto bazel-bin/Telegram/Telegram_archive-root/Payload/Telegram.app "$RUNNER_TEMP/ipa/Payload/Telegram.app"
+          (cd "$RUNNER_TEMP/ipa" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/artifacts/NanoVoice-unsigned.ipa" Payload)
+          echo 'Unsigned compilation artifact with dummy API credentials; not installable on iPhone.' > artifacts/README.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NanoVoice-unsigned-${{ github.run_number }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NanoVoice-build-log-${{ github.run_number }}
+          path: ${{ runner.temp }}/nanovoice-build.log
+          retention-days: 7
+          if-no-files-found: ignore

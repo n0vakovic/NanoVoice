@@ -10,8 +10,11 @@ import urllib.request
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--configuration', type=Path, required=True)
-parser.add_argument('--profile', type=Path, required=True)
+parser.add_argument('--profile', type=Path)
+parser.add_argument('--unsigned', action='store_true')
 args = parser.parse_args()
+if not args.unsigned and args.profile is None:
+    parser.error('--profile is required unless --unsigned is used')
 root = Path(__file__).resolve().parents[2]
 config = json.loads(args.configuration.read_text())
 version, checksum = json.loads((root / 'versions.json').read_text())['bazel'].split(':')
@@ -40,6 +43,9 @@ directory.mkdir(parents=True, exist_ok=True)
 (directory / 'variables.bzl').chmod(0o600)
 profiles = directory / 'provisioning'
 profiles.mkdir(exist_ok=True)
-shutil.copyfile(args.profile, profiles / 'Telegram.mobileprovision')
-(profiles / 'BUILD').write_text('exports_files(["Telegram.mobileprovision"])\n')
+if args.unsigned:
+    (profiles / 'BUILD').write_text('')
+else:
+    shutil.copyfile(args.profile, profiles / 'Telegram.mobileprovision')
+    (profiles / 'BUILD').write_text('exports_files(["Telegram.mobileprovision"])\n')
 print('Prepared ignored build inputs. No credentials printed.')
