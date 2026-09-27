@@ -33,7 +33,8 @@ jobs:
                   subprocess.run(['sudo', 'rm', '-rf', str(app)], check=True)
           PY
           if [ -n "${ANDROID_HOME:-}" ]; then sudo rm -rf "$ANDROID_HOME"; fi
-          xcrun simctl runtime delete all || true
+          # Interface Builder requires the iOS simulator runtime even for device builds.
+          xcrun simctl list runtimes
           xcodebuild -downloadComponent MetalToolchain
           df -h /
       - name: Prepare unsigned inputs
