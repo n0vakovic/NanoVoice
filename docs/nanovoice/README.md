@@ -39,3 +39,15 @@ Credentials and signing files must never be committed. The inherited CI workflow
 `origin` is the personal public repository; `upstream` is TelegramMessenger/Telegram-iOS. Fetch upstream and review/merge changes on a separate branch. The `nanovoice-v0.1.0` tag preserves the working milestone. Keep the upstream GPL license and attribution.
 
 Bazel's output root is disposable and was approximately 25 GB. Preserve a signed app backup, private configuration/profile, and the signing key before deleting caches. Deleting these caches does not uninstall the app from the phone; the next build will be cold. Source and tests occupy less than 1 GB and are worth retaining.
+
+## GitHub Actions compilation trial
+
+The manual **NanoVoice unsigned iPhone build** workflow (`nanovoice-unsigned.yml`) uses a standard `macos-26` runner and Xcode 26.6. Trigger with:
+
+```sh
+gh workflow run nanovoice-unsigned.yml --repo n0vakovic/NanoVoice --ref nanovoice
+```
+
+This trial uses dummy API credentials and no personal signing keys. Bazel's device rule requires a profile input even with signing disabled, so `prepare-build.py --unsigned` copies the upstream checked-in test profile. `--define=nanovoice_unsigned=true` skips entitlement/profile matching only for this compilation target; `--features=disable_legacy_signing` disables signing. The test profile is removed when packaging the artifact. Normal device builds retain their default entitlement validation.
+
+The resulting `NanoVoice-unsigned.ipa` is a compilation artifact, not an installable app. Workflow artifacts and build diagnostics are retained for seven days. A signed delivery workflow is not yet configured. Fork-relative submodule URLs were replaced with explicit upstream URLs so recursive checkout works from this repository.
