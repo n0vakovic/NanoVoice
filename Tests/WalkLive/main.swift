@@ -1,0 +1,21 @@
+import Foundation
+let gate = WalkReplyGate()
+func accept(_ id: String, peer: Int64 = 1, timestamp: Int32 = 100, now: Int32 = 100, incoming: Bool = true, audio: Bool = true) -> Bool {
+    gate.accept(peer: peer, id: id, timestamp: timestamp, now: now, incoming: incoming, audio: audio)
+}
+assert(!accept("off"))
+gate.start(peer: 1, timestamp: 100)
+assert(!accept("other", peer: 2))
+assert(!accept("outgoing", incoming: false))
+assert(!accept("text", audio: false))
+assert(!accept("history", timestamp: 99))
+assert(!accept("stale", timestamp: 100, now: 191))
+assert(accept("new"))
+assert(!accept("new"))
+assert(accept("next", timestamp: 102, now: 102))
+gate.stop()
+assert(!accept("stopped"))
+gate.start(peer: 2, timestamp: 200)
+assert(!accept("previousChat", timestamp: 200, now: 200))
+assert(accept("freshOther", peer: 2, timestamp: 200, now: 200))
+print("PASS: off, peer isolation, outgoing/text/history/stale rejection, deduplication, and session reset")

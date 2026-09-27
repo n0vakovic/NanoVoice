@@ -921,6 +921,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
                 return .never()
             }
         }, isContextNetworkAccessAllowed: { [weak self] in
+            if walkChatFixtureEnabled { return .single(false) }
             if let strongSelf = self {
                 return strongSelf.shouldKeepConnection.get() |> distinctUntilChanged
             } else {
@@ -962,7 +963,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
         |> distinctUntilChanged |> deliverOn(queue)
         self.shouldKeepConnectionDisposable.set(shouldKeepConnectionSignal.start(next: { [weak self] value in
             if let strongSelf = self {
-                if value {
+                if value && !walkChatFixtureEnabled {
                     Logger.shared.log("Network", "Resume network connection")
                     strongSelf.mtProto.resume()
                 } else {
@@ -1084,6 +1085,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
     }
     
     public func requestWithAdditionalInfo<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), info: NetworkRequestAdditionalInfo, tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<NetworkRequestResult<T>, MTRpcError> {
+        if walkChatFixtureEnabled { return .never() }
         let requestService = self.requestService
         return Signal { subscriber in
             let request = MTRequest()

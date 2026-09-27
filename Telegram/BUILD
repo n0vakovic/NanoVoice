@@ -333,6 +333,11 @@ alternate_icon_folders = [
 
 composer_icon_folders = ["Telegram"]
 
+filegroup(
+    name = "NanoVoiceIcon",
+    srcs = glob(["Telegram-iOS/NanoVoice.xcassets/**"]),
+)
+
 [
     filegroup(
         name = "{}".format(name),
@@ -371,8 +376,10 @@ swift_library(
     module_name = "Lib",
     srcs = glob([
         "Telegram-iOS/Application.swift",
+        "Telegram-iOS/WalkDemo/*.swift",
     ]),
     data = [
+        ":WalkDemoAudio",
         ":Icons",
         ":AppResources",
         ":AppIntentVocabularyResources",
@@ -393,6 +400,11 @@ swift_library(
         "//submodules/TelegramUI:TelegramUI",
         "//third-party/boringssl:crypto",
     ],
+)
+
+filegroup(
+    name = "WalkDemoAudio",
+    srcs = glob(["Telegram-iOS/WalkDemo/*.aiff", "Telegram-iOS/WalkDemo/*.ogg"]),
 )
 
 plist_fragment(
@@ -629,7 +641,7 @@ plist_fragment(
     template =
     """
     <key>CFBundleDisplayName</key>
-    <string>Telegram</string>
+    <string>NanoVoice</string>
     """
 )
 
@@ -962,7 +974,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.Share</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>NanoVoice</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1054,7 +1066,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.NotificationContent</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>NanoVoice</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1161,7 +1173,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.Widget</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>NanoVoice</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1274,7 +1286,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.SiriIntents</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>NanoVoice</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1405,7 +1417,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.BroadcastUpload</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>NanoVoice</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1499,7 +1511,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.NotificationService</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>NanoVoice</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1568,11 +1580,11 @@ plist_fragment(
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>Telegram</string>
+    <string>NanoVoice</string>
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>NanoVoice</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>
@@ -1763,7 +1775,7 @@ ios_application(
     bundle_id = "{telegram_bundle_id}".format(
         telegram_bundle_id = telegram_bundle_id,
     ),
-    families = ["iphone", "ipad"],
+    families = ["iphone"],
     minimum_os_version = minimum_os_version,
     provisioning_profile = select({
         ":disableProvisioningProfilesSetting": None,
@@ -1777,7 +1789,7 @@ ios_application(
         ":RequiredDeviceCapabilitiesPlist",
         ":UrlTypesInfoPlist",
     ],
-    app_icons = [ ":{}_icon".format(name) for name in composer_icon_folders ],
+    app_icons = [":NanoVoiceIcon"],
     alternate_icons = [
         ":{}".format(name) for name in alternate_icon_folders
     ],

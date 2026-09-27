@@ -7664,11 +7664,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
     }
     
+    private var walkChatControls: WalkChatControls?
     var returnInputViewFocus = false
     
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
+        if walkChatControls == nil, case let .peer(id) = chatLocation, (walkChatFixtureEnabled && (id == walkChatRussId || id == walkChatEmmaId)) || (NanoVoiceChats.enabled && NanoVoiceChats.contains(id, account: context.account.peerId)) {
+            walkChatControls = WalkChatControls(controller: self, context: context, peerId: id)
+        }
         self.didAppear = true
         
         self.chatDisplayNode.historyNode.experimentalSnapScrollToItem = false
@@ -8144,6 +8148,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        self.walkChatControls?.stop()
         
         if #available(iOS 18.0, *) {
         } else {

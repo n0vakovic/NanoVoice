@@ -2253,7 +2253,9 @@ extension ChatControllerImpl {
                 }
                 
                 let topPinnedMessage: Signal<ChatPinnedMessage?, NoError>
-                if let subject = initialSubject {
+                if walkChatFixtureEnabled {
+                    topPinnedMessage = .single(nil)
+                } else if let subject = initialSubject {
                     switch subject {
                     case .messageOptions, .pinnedMessages, .scheduledMessages:
                         topPinnedMessage = .single(nil)

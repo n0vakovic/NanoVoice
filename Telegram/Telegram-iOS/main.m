@@ -2,6 +2,7 @@
 
 int main(int argc, char *argv[]) {
     @autoreleasepool {
-        return UIApplicationMain(argc, argv, @"Application", @"AppDelegate");
+        NSString *delegate = [[NSProcessInfo processInfo].arguments containsObject:@"--walk-demo-panel"] ? @"WalkDemoAppDelegate" : @"AppDelegate";
+        return UIApplicationMain(argc, argv, @"Application", delegate);
     }
 }

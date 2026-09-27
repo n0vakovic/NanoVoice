@@ -1,3 +1,9 @@
+# NanoVoice
+
+Personal hands-free Telegram client for iPhone. [Features, verified milestone, and build instructions](docs/nanovoice/README.md).
+
+---
+
 # Telegram iOS Source Code Compilation Guide
 
 We welcome all developers to use our API and source code to create applications on our platform.

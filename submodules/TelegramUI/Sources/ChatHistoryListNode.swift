@@ -1857,7 +1857,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         
         let chatThemes = self.context.engine.themes.getChatThemes(accountManager: self.context.sharedContext.accountManager)
         
-        let deviceContactsNumbers = self.context.sharedContext.deviceContactPhoneNumbers.get()
+        let deviceContactsNumbers: Signal<Set<String>, NoError> = walkChatFixtureEnabled ? .single(Set()) : self.context.sharedContext.deviceContactPhoneNumbers.get()
         |> distinctUntilChanged
         
         let premiumConfiguration = PremiumConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 })

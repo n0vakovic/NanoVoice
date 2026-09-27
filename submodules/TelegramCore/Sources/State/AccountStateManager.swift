@@ -241,6 +241,11 @@ public final class AccountStateManager {
             return self.isUpdatingValue.get()
         }
         
+        private let incomingAudioSessionMessagesPipe = ValuePipe<[Message]>()
+        public var incomingAudioSessionMessages: Signal<[Message], NoError> {
+            return self.incomingAudioSessionMessagesPipe.signal()
+        }
+
         private let notificationMessagesPipe = ValuePipe<[([Message], PeerGroupId, Bool, MessageHistoryThreadData?)]>()
         public var notificationMessages: Signal<[([Message], PeerGroupId, Bool, MessageHistoryThreadData?)], NoError> {
             return self.notificationMessagesPipe.signal()
@@ -1210,10 +1215,12 @@ public final class AccountStateManager {
                     let _ = self.delayNotificatonsUntil.swap(events.delayNotificatonsUntil)
                 }
                 
-                let signal = self.postbox.transaction { transaction -> [([Message], PeerGroupId, Bool, MessageHistoryThreadData?)] in
+                let signal = self.postbox.transaction { transaction -> ([([Message], PeerGroupId, Bool, MessageHistoryThreadData?)], [Message]) in
+                    var incomingMessages: [Message] = []
                     var messageList: [([Message], PeerGroupId, Bool, MessageHistoryThreadData?)] = []
                     
                     for id in events.addedIncomingMessageIds {
+                        if let message = transaction.getMessage(id) { incomingMessages.append(message) }
                         let (messages, notify, _, _, threadData) = messagesForNotification(transaction: transaction, id: id, alwaysReturnMessage: false)
                         if !messages.isEmpty {
                             messageList.append((messages, .root, notify, threadData))
@@ -1237,12 +1244,13 @@ public final class AccountStateManager {
                         }
                         messageList.append((wasScheduledMessages, .root, true, threadData))
                     }
-                    return messageList
+                    return (messageList, incomingMessages)
                 }
                 
                 let _ = (signal
-                |> deliverOn(self.queue)).start(next: { [weak self] messages in
+                |> deliverOn(self.queue)).start(next: { [weak self] messages, incomingMessages in
                     if let strongSelf = self {
+                        strongSelf.incomingAudioSessionMessagesPipe.putNext(incomingMessages)
                         strongSelf.notificationMessagesPipe.putNext(messages)
                     }
                 }, completed: {
@@ -1913,6 +1921,13 @@ public final class AccountStateManager {
         }
     }
     
+    /// Newly applied incoming messages, independent of chat mute/notification settings.
+    public var incomingAudioSessionMessages: Signal<[Message], NoError> {
+        return self.impl.signalWith { impl, subscriber in
+            return impl.incomingAudioSessionMessages.start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
+        }
+    }
+
     public var notificationMessages: Signal<[([Message], PeerGroupId, Bool, MessageHistoryThreadData?)], NoError> {
         return self.impl.signalWith { impl, subscriber in
             return impl.notificationMessages.start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)

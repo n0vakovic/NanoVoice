@@ -199,6 +199,14 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     }
     
     public func addRootControllers(showCallsTab: Bool) {
+        if NanoVoiceChats.enabled {
+            let home = NanoVoiceHomeController(context: self.context, openChat: { [weak self] peerId in
+                guard let self else { return }
+                self.pushViewController(ChatControllerImpl(context: self.context, chatLocation: .peer(id: peerId)), animated: true)
+            })
+            self.pushViewController(home, animated: false)
+            return
+        }
         let tabBarController = TabBarControllerImpl(theme: self.presentationData.theme, strings: self.presentationData.strings)
         tabBarController.navigationPresentation = .master
         let chatListController = self.context.sharedContext.makeChatListController(context: self.context, location: .chatList(groupId: .root), controlsHistoryPreload: true, hideNetworkActivityStatus: false, previewing: false, enableDebugActions: !GlobalExperimentalSettings.isAppStoreBuild)

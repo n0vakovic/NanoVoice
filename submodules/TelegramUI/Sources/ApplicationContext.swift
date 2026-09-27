@@ -292,6 +292,13 @@ final class AuthorizedApplicationContext {
 
         let engine = context.engine
         self.notificationMessagesDisposable.set((context.account.stateManager.notificationMessages
+        |> map { messages in
+            guard NanoVoiceChats.enabled else { return messages }
+            return messages.filter { item in
+                guard let peer = item.0.first?.id.peerId else { return false }
+                return NanoVoiceChats.contains(peer, account: context.account.peerId)
+            }
+        }
         |> mapToSignal { messageList -> Signal<[([Message], PeerGroupId, Bool, MessageHistoryThreadData?)], NoError> in
             return engine.data.get(EngineDataMap(
                 messageList.compactMap { item -> TelegramEngine.EngineData.Item.Messages.ChatListIndex? in

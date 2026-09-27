@@ -111,6 +111,7 @@ private final class MediaPlayerAudioRendererContext {
 private final class MediaPlayerContext {
     private let queue: Queue
     private let audioSessionManager: ManagedAudioSession
+    private let externalAudioSession: MediaPlayerAudioSessionControl?
     
     private let postbox: Postbox
     private let userLocation: MediaResourceUserLocation
@@ -152,11 +153,12 @@ private final class MediaPlayerContext {
     
     private var stoppedAtEnd = false
     
-    init(queue: Queue, audioSessionManager: ManagedAudioSession, playerStatus: Promise<MediaPlayerStatus>, audioLevelPipe: ValuePipe<Float>, postbox: Postbox, userLocation: MediaResourceUserLocation, userContentType: MediaResourceUserContentType, resourceReference: MediaResourceReference, tempFilePath: String?, limitedFileRange: Range<Int64>?, streamable: MediaPlayerStreaming, video: Bool, preferSoftwareDecoding: Bool, playAutomatically: Bool, enableSound: Bool, baseRate: Double, fetchAutomatically: Bool, playAndRecord: Bool, soundMuted: Bool, ambient: Bool, mixWithOthers: Bool, keepAudioSessionWhilePaused: Bool, continuePlayingWithoutSoundOnLostAudioSession: Bool, storeAfterDownload: (() -> Void)? = nil, isAudioVideoMessage: Bool) {
+    init(queue: Queue, audioSessionManager: ManagedAudioSession, externalAudioSession: MediaPlayerAudioSessionControl?, playerStatus: Promise<MediaPlayerStatus>, audioLevelPipe: ValuePipe<Float>, postbox: Postbox, userLocation: MediaResourceUserLocation, userContentType: MediaResourceUserContentType, resourceReference: MediaResourceReference, tempFilePath: String?, limitedFileRange: Range<Int64>?, streamable: MediaPlayerStreaming, video: Bool, preferSoftwareDecoding: Bool, playAutomatically: Bool, enableSound: Bool, baseRate: Double, fetchAutomatically: Bool, playAndRecord: Bool, soundMuted: Bool, ambient: Bool, mixWithOthers: Bool, keepAudioSessionWhilePaused: Bool, continuePlayingWithoutSoundOnLostAudioSession: Bool, storeAfterDownload: (() -> Void)? = nil, isAudioVideoMessage: Bool) {
         assert(queue.isCurrent())
         
         self.queue = queue
         self.audioSessionManager = audioSessionManager
+        self.externalAudioSession = externalAudioSession
         self.playerStatus = playerStatus
         self.audioLevelPipe = audioLevelPipe
         self.postbox = postbox
@@ -408,7 +410,7 @@ private final class MediaPlayerContext {
                 self.audioRenderer = nil
                 
                 let queue = self.queue
-                renderer = MediaPlayerAudioRenderer(audioSession: .manager(self.audioSessionManager), forAudioVideoMessage: self.isAudioVideoMessage, playAndRecord: self.playAndRecord, soundMuted: self.soundMuted, ambient: self.ambient, mixWithOthers: self.mixWithOthers, forceAudioToSpeaker: self.forceAudioToSpeaker, baseRate: self.baseRate, audioLevelPipe: self.audioLevelPipe, updatedRate: { [weak self] in
+                renderer = MediaPlayerAudioRenderer(audioSession: self.externalAudioSession ?? .manager(self.audioSessionManager), forAudioVideoMessage: self.isAudioVideoMessage, playAndRecord: self.playAndRecord, soundMuted: self.soundMuted, ambient: self.ambient, mixWithOthers: self.mixWithOthers, forceAudioToSpeaker: self.forceAudioToSpeaker, baseRate: self.baseRate, audioLevelPipe: self.audioLevelPipe, updatedRate: { [weak self] in
                     queue.async {
                         if let strongSelf = self {
                             strongSelf.tick()
@@ -491,7 +493,7 @@ private final class MediaPlayerContext {
                 self.lastStatusUpdateTimestamp = nil
                 if self.enableSound {
                     let queue = self.queue
-                    let renderer = MediaPlayerAudioRenderer(audioSession: .manager(self.audioSessionManager), forAudioVideoMessage: self.isAudioVideoMessage, playAndRecord: self.playAndRecord, soundMuted: self.soundMuted, ambient: self.ambient, mixWithOthers: self.mixWithOthers, forceAudioToSpeaker: self.forceAudioToSpeaker, baseRate: self.baseRate, audioLevelPipe: self.audioLevelPipe, updatedRate: { [weak self] in
+                    let renderer = MediaPlayerAudioRenderer(audioSession: self.externalAudioSession ?? .manager(self.audioSessionManager), forAudioVideoMessage: self.isAudioVideoMessage, playAndRecord: self.playAndRecord, soundMuted: self.soundMuted, ambient: self.ambient, mixWithOthers: self.mixWithOthers, forceAudioToSpeaker: self.forceAudioToSpeaker, baseRate: self.baseRate, audioLevelPipe: self.audioLevelPipe, updatedRate: { [weak self] in
                         queue.async {
                             if let strongSelf = self {
                                 strongSelf.tick()
@@ -1134,10 +1136,10 @@ public final class MediaPlayer {
         }
     }
     
-    public init(audioSessionManager: ManagedAudioSession, postbox: Postbox, userLocation: MediaResourceUserLocation, userContentType: MediaResourceUserContentType, resourceReference: MediaResourceReference, tempFilePath: String? = nil, limitedFileRange: Range<Int64>? = nil, streamable: MediaPlayerStreaming, video: Bool, preferSoftwareDecoding: Bool, playAutomatically: Bool = false, enableSound: Bool, baseRate: Double = 1.0, fetchAutomatically: Bool, playAndRecord: Bool = false, soundMuted: Bool = false, ambient: Bool = false, mixWithOthers: Bool = false, keepAudioSessionWhilePaused: Bool = false, continuePlayingWithoutSoundOnLostAudioSession: Bool = false, storeAfterDownload: (() -> Void)? = nil, isAudioVideoMessage: Bool = false) {
+    public init(audioSessionManager: ManagedAudioSession, externalAudioSession: MediaPlayerAudioSessionControl? = nil, postbox: Postbox, userLocation: MediaResourceUserLocation, userContentType: MediaResourceUserContentType, resourceReference: MediaResourceReference, tempFilePath: String? = nil, limitedFileRange: Range<Int64>? = nil, streamable: MediaPlayerStreaming, video: Bool, preferSoftwareDecoding: Bool, playAutomatically: Bool = false, enableSound: Bool, baseRate: Double = 1.0, fetchAutomatically: Bool, playAndRecord: Bool = false, soundMuted: Bool = false, ambient: Bool = false, mixWithOthers: Bool = false, keepAudioSessionWhilePaused: Bool = false, continuePlayingWithoutSoundOnLostAudioSession: Bool = false, storeAfterDownload: (() -> Void)? = nil, isAudioVideoMessage: Bool = false) {
         let audioLevelPipe = self.audioLevelPipe
         self.queue.async {
-            let context = MediaPlayerContext(queue: self.queue, audioSessionManager: audioSessionManager, playerStatus: self.statusValue, audioLevelPipe: audioLevelPipe, postbox: postbox, userLocation: userLocation, userContentType: userContentType, resourceReference: resourceReference, tempFilePath: tempFilePath, limitedFileRange: limitedFileRange, streamable: streamable, video: video, preferSoftwareDecoding: preferSoftwareDecoding, playAutomatically: playAutomatically, enableSound: enableSound, baseRate: baseRate, fetchAutomatically: fetchAutomatically, playAndRecord: playAndRecord, soundMuted: soundMuted, ambient: ambient, mixWithOthers: mixWithOthers, keepAudioSessionWhilePaused: keepAudioSessionWhilePaused, continuePlayingWithoutSoundOnLostAudioSession: continuePlayingWithoutSoundOnLostAudioSession, storeAfterDownload: storeAfterDownload, isAudioVideoMessage: isAudioVideoMessage)
+            let context = MediaPlayerContext(queue: self.queue, audioSessionManager: audioSessionManager, externalAudioSession: externalAudioSession, playerStatus: self.statusValue, audioLevelPipe: audioLevelPipe, postbox: postbox, userLocation: userLocation, userContentType: userContentType, resourceReference: resourceReference, tempFilePath: tempFilePath, limitedFileRange: limitedFileRange, streamable: streamable, video: video, preferSoftwareDecoding: preferSoftwareDecoding, playAutomatically: playAutomatically, enableSound: enableSound, baseRate: baseRate, fetchAutomatically: fetchAutomatically, playAndRecord: playAndRecord, soundMuted: soundMuted, ambient: ambient, mixWithOthers: mixWithOthers, keepAudioSessionWhilePaused: keepAudioSessionWhilePaused, continuePlayingWithoutSoundOnLostAudioSession: continuePlayingWithoutSoundOnLostAudioSession, storeAfterDownload: storeAfterDownload, isAudioVideoMessage: isAudioVideoMessage)
             self.contextRef = Unmanaged.passRetained(context)
         }
     }

@@ -177,11 +177,11 @@ public final class SharedWakeupManager {
             strongSelf.checkTasks()
         })
         
-        self.managedPausedInBackgroundPlayer = combineLatest(queue: .mainQueue(), mediaManager.activeGlobalMediaPlayerAccountId, inForeground).startStrict(next: { [weak mediaManager] accountAndActive, inForeground in
+        self.managedPausedInBackgroundPlayer = combineLatest(queue: .mainQueue(), mediaManager.activeGlobalMediaPlayerAccountId, inForeground, WalkVoiceSession.activeAccount.get()).startStrict(next: { [weak mediaManager] accountAndActive, inForeground, walkAccount in
             guard let mediaManager = mediaManager else {
                 return
             }
-            if !inForeground, let accountAndActive = accountAndActive, !accountAndActive.1 {
+            if walkAccount == nil, !inForeground, let accountAndActive = accountAndActive, !accountAndActive.1 {
                 mediaManager.audioSession.dropAll()
             }
         })
@@ -237,9 +237,9 @@ public final class SharedWakeupManager {
                 }
                 |> distinctUntilChanged
                 
-                let hasActiveAudio = combineLatest(queue: .mainQueue(), isPlayingBackgroundAudio, isPlayingBackgroundActiveCall)
-                |> map { isPlayingBackgroundAudio, isPlayingBackgroundActiveCall in
-                    return isPlayingBackgroundAudio || isPlayingBackgroundActiveCall
+                let hasActiveAudio = combineLatest(queue: .mainQueue(), isPlayingBackgroundAudio, isPlayingBackgroundActiveCall, WalkVoiceSession.activeAccount.get())
+                |> map { isPlayingBackgroundAudio, isPlayingBackgroundActiveCall, walkAccount in
+                    return isPlayingBackgroundAudio || isPlayingBackgroundActiveCall || walkAccount == account.id
                 }
                 |> distinctUntilChanged
                 

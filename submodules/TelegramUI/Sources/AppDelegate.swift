@@ -215,6 +215,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 }
 
 @objc(AppDelegate) class AppDelegate: UIResponder, UIApplicationDelegate, PKPushRegistryDelegate, UNUserNotificationCenterDelegate, URLSessionDelegate, URLSessionTaskDelegate {
+    private var walkFixturePreparing = false
     @objc var window: UIWindow?
     var nativeWindow: (UIWindow & WindowHost)?
     var mainWindow: Window1!
@@ -664,14 +665,16 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         let isUITest = CommandLine.arguments.contains("--ui-test")
 
         let rootPath: String
-        if isUITest {
+        if walkChatFixtureEnabled {
+            rootPath = rootPathForBasePath(appGroupUrl.path + "/nanovoice-chat-fixture")
+        } else if isUITest {
             let testDataPath = appGroupUrl.path + "/telegram-ui-tests-data"
             let _ = try? FileManager.default.removeItem(atPath: testDataPath)
             rootPath = rootPathForBasePath(testDataPath)
         } else {
             rootPath = rootPathForBasePath(appGroupUrl.path)
         }
-        if !isUITest {
+        if !isUITest && !walkChatFixtureEnabled {
             performAppGroupUpgrades(appGroupPath: appGroupUrl.path, rootPath: rootPath)
         }
         
@@ -1304,6 +1307,13 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             |> deliverOnMainQueue
             |> map { accountAndSettings -> UnauthorizedApplicationContext? in
                 return accountAndSettings.flatMap { account, otherAccountPhoneNumbers in
+                    if walkChatFixtureEnabled {
+                        if !self.walkFixturePreparing {
+                            self.walkFixturePreparing = true
+                            let _ = prepareWalkChatFixture(account: account, accountManager: accountManager).start()
+                        }
+                        return nil
+                    }
                     return UnauthorizedApplicationContext(apiId: buildConfig.apiId, apiHash: buildConfig.apiHash, sharedContext: sharedApplicationContext.sharedContext, account: account, otherAccountPhoneNumbers: otherAccountPhoneNumbers)
                 }
             }
@@ -1345,6 +1355,23 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
                     self.mainWindow.debugAction = nil
                     self.mainWindow.viewController = context.rootController
+                    if walkChatFixtureEnabled && firstTime {
+                        let _ = (context.context.account.postbox.transaction { transaction -> Void in
+                            for hole in transaction.allChatListHoles(groupId: .root) {
+                                transaction.replaceChatListHole(groupId: .root, index: hole.index, hole: nil)
+                            }
+                            for peerId in [walkChatRussId, walkChatEmmaId] {
+                                transaction.removeHole(peerId: peerId, threadId: nil, namespace: Namespaces.Message.Cloud, space: .everywhere, range: 1 ... Int32.max - 1)
+                                transaction.removeHole(peerId: peerId, threadId: nil, namespace: Namespaces.Message.Cloud, space: .tag(.voiceOrInstantVideo), range: 1 ... Int32.max - 1)
+                                transaction.resetIncomingReadStates([peerId: [Namespaces.Message.Cloud: .idBased(maxIncomingReadId: 1, maxOutgoingReadId: 0, maxKnownId: 1, count: 0, markedUnread: false)]])
+                                transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, data in (data as? CachedUserData ?? CachedUserData()).withUpdatedBusinessIntro(nil) })
+                            }
+                        } |> deliverOnMainQueue).start(completed: {
+                            NSLog("WalkChat: opening native chat")
+                            context.rootController.pushViewController(ChatControllerImpl(context: context.context, chatLocation: .peer(id: walkChatRussId)), animated: false)
+                        })
+                    }
+
                     
                     if firstTime {
                         let layer = context.rootController.view.layer
