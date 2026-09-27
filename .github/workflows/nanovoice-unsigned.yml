@@ -62,7 +62,9 @@ jobs:
       - name: Package unsigned IPA
         run: |
           mkdir -p "$RUNNER_TEMP/ipa/Payload" artifacts
-          ditto bazel-bin/Telegram/Telegram_archive-root/Payload/Telegram.app "$RUNNER_TEMP/ipa/Payload/Telegram.app"
+          # Use the declared Bazel output, not an intermediate bundle directory.
+          unzip -q bazel-bin/Telegram/Telegram.ipa -d "$RUNNER_TEMP/ipa"
+          test -f "$RUNNER_TEMP/ipa/Payload/Telegram.app/Info.plist"
           rm -f "$RUNNER_TEMP/ipa/Payload/Telegram.app/embedded.mobileprovision"
           (cd "$RUNNER_TEMP/ipa" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/artifacts/NanoVoice-unsigned.ipa" Payload)
           echo 'Unsigned compilation artifact with dummy API credentials; not installable on iPhone.' > artifacts/README.txt
