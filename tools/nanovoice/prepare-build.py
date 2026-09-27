@@ -44,7 +44,9 @@ directory.mkdir(parents=True, exist_ok=True)
 profiles = directory / 'provisioning'
 profiles.mkdir(exist_ok=True)
 if args.unsigned:
-    (profiles / 'BUILD').write_text('')
+    # Device rules require a profile input even when codesigning is disabled.
+    shutil.copyfile(root / 'build-system/fake-codesigning/profiles/Telegram.mobileprovision', profiles / 'Telegram.mobileprovision')
+    (profiles / 'BUILD').write_text('exports_files(["Telegram.mobileprovision"])\n')
 else:
     shutil.copyfile(args.profile, profiles / 'Telegram.mobileprovision')
     (profiles / 'BUILD').write_text('exports_files(["Telegram.mobileprovision"])\n')

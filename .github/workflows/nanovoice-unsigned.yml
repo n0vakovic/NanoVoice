@@ -54,7 +54,7 @@ jobs:
           "build-input/bazel-${BAZEL_VERSION}-darwin-arm64" \
             --output_user_root="$RUNNER_TEMP/nanovoice-bazel" \
             build Telegram/Telegram --//Telegram:disableExtensions \
-            --//Telegram:disableProvisioningProfiles --features=disable_legacy_signing \
+            --define=nanovoice_unsigned=true --features=disable_legacy_signing \
             --define="buildNumber=$((1000 + GITHUB_RUN_NUMBER))" \
             -c dbg --ios_multi_cpus=arm64 --watchos_cpus=arm64_32 \
             --jobs=2 --local_resources=memory=4096 2>&1 | tee "$RUNNER_TEMP/nanovoice-build.log"
@@ -62,6 +62,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/ipa/Payload" artifacts
           ditto bazel-bin/Telegram/Telegram_archive-root/Payload/Telegram.app "$RUNNER_TEMP/ipa/Payload/Telegram.app"
+          rm -f "$RUNNER_TEMP/ipa/Payload/Telegram.app/embedded.mobileprovision"
           (cd "$RUNNER_TEMP/ipa" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/artifacts/NanoVoice-unsigned.ipa" Payload)
           echo 'Unsigned compilation artifact with dummy API credentials; not installable on iPhone.' > artifacts/README.txt
       - uses: actions/upload-artifact@v4

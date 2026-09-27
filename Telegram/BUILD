@@ -1770,8 +1770,17 @@ apple_prebuilt_watchos_application(
     tags = ["manual"],
 )
 
+config_setting(
+    name = "nanovoiceUnsigned",
+    define_values = {"nanovoice_unsigned": "true"},
+)
+
 ios_application(
     name = "Telegram",
+    entitlements_validation = select({
+        ":nanovoiceUnsigned": "skip",
+        "//conditions:default": "loose",
+    }),
     bundle_id = "{telegram_bundle_id}".format(
         telegram_bundle_id = telegram_bundle_id,
     ),
