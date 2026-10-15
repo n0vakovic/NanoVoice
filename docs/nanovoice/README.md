@@ -32,7 +32,7 @@ The setup helper downloads/checks the pinned Bazel binary and generates ignored 
 
 Output: `bazel-bin/Telegram/Telegram_archive-root/Payload/Telegram.app`. Copy this outside Bazel's cache before retaining or re-signing it. Verify with `codesign --verify --deep --strict`, install with `xcrun devicectl device install app --device YOUR_DEVICE /path/to/NanoVoice.app`, then launch `local.milan.NanoVoice`. Use no demo arguments for the real account.
 
-Credentials and signing files must never be committed. The inherited CI workflow is manual-only and uses upstream fake signing: it is not a configured NanoVoice delivery pipeline. Cloud CI remains future work.
+Credentials and signing files must never be committed. The inherited CI workflow is manual-only and uses upstream fake signing: it is not a configured NanoVoice delivery pipeline. The separate NanoVoice unsigned compilation trial is described below; signed cloud delivery is not yet configured.
 
 ## Upstream updates and cleanup
 
@@ -51,3 +51,5 @@ gh workflow run nanovoice-unsigned.yml --repo n0vakovic/NanoVoice --ref nanovoic
 This trial uses dummy API credentials and no personal signing keys. Bazel's device rule requires a profile input even with signing disabled, so `prepare-build.py --unsigned` copies the upstream checked-in test profile. `--define=nanovoice_unsigned=true` skips entitlement/profile matching only for this compilation target; `--features=disable_legacy_signing` disables signing. The test profile is removed when packaging the artifact. Normal device builds retain their default entitlement validation.
 
 The resulting `NanoVoice-unsigned.ipa` is a compilation artifact, not an installable app. Workflow artifacts and build diagnostics are retained for seven days. A signed delivery workflow is not yet configured. Fork-relative submodule URLs were replaced with explicit upstream URLs so recursive checkout works from this repository.
+
+The runner keeps its iOS simulator runtimes: Interface Builder needs these even when compiling a device-only app. Removing them caused `iOS 26.5 Platform Not Installed` during launch-screen compilation. Unused Xcode installations may still be removed to free space on the disposable runner.
