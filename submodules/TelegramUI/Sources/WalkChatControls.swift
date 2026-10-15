@@ -20,7 +20,6 @@ final class WalkChatControls: NSObject {
     private var voiceSession: WalkVoiceSession?
     private var replyPlayer: MediaPlayer?
     private var replyStatus: Disposable?
-    private let sendDisposable = DisposableSet()
     private var pending: [Message] = []
     private var current: EngineMessage.Id?
     private var lastPlayerStatus = ""
@@ -89,7 +88,6 @@ final class WalkChatControls: NSObject {
         pauseTimeout?.cancel()
         for work in retryWork.values { work.cancel() }
         replyStatus?.dispose()
-        sendDisposable.dispose()
         incomingDisposable?.dispose()
         fetchDisposable.dispose()
         dataDisposable.dispose()
@@ -533,25 +531,35 @@ final class WalkChatControls: NSObject {
         context.engine.resources.storeResourceData(id: EngineMediaResource.Id(resource.id), data: data)
         let file = TelegramMediaFile(fileId: EngineMedia.Id(namespace: Namespaces.Media.LocalFile, id: randomId), partialReference: nil, resource: resource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "audio/ogg", size: Int64(data.count), attributes: [.Audio(isVoice: true, duration: max(1, Int(duration)), title: nil, performer: nil, waveform: nil)], alternativeRepresentations: [])
         let message = EnqueueMessage.message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
-        // A recovered draft enqueue must outlive this controller; only delete its file after
-        // the transaction has produced a message ID. No controller-owned disposal for it.
+        // An explicit send must outlive this controller: media preparation happens before
+        // the Postbox transaction, and cancelling there can lose an already finished capture.
+        let store = draftStore
+        let failed: () -> Void = { [weak self] in
+            if !recovered {
+                do { try store.save(data: data, duration: duration) }
+                catch {
+                    store.retainUnsaved(data: data, duration: duration)
+                    WalkDiagnostics.log("Failed send could not be saved to disk; retained in memory")
+                }
+                Self.notifyIfAllowed("Voice message not queued", body: "Open NanoVoice and use Recover recordings. Keep the app open until recovery is complete.")
+            }
+            self?.showError("Could not queue the voice message. Use Recover recordings to try again; keep NanoVoice open.")
+            self?.updateTitle()
+        }
         var receivedResult = false
         let signal = enqueueMessages(account: context.account, peerId: peerId, messages: [message]) |> deliverOnMainQueue
         let next: ([EngineMessage.Id?]) -> Void = { [weak self] ids in
+            guard !receivedResult else { return }
             receivedResult = true
             let success = ids.contains(where: { $0 != nil })
             if success { self?.log("Voice reply queued for selected chat") }
-            else { self?.showError("Could not queue the voice message.") }
+            else { failed() }
             completion?(success)
         }
         let completed: () -> Void = {
-            if !receivedResult { completion?(false) }
+            if !receivedResult { receivedResult = true; failed(); completion?(false) }
         }
-        if recovered {
-            let _ = signal.startStandalone(next: next, completed: completed)
-        } else {
-            sendDisposable.add(signal.start(next: next, completed: completed))
-        }
+        let _ = signal.startStandalone(next: next, completed: completed)
     }
 
     private func log(_ text: String) {
