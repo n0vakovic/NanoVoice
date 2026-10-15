@@ -8,6 +8,7 @@ The rollback point is tag `nanovoice-before-walk-reliability-20261015`
 - `1bf5aaa9`: validate and explicitly rebind the two agent chats.
 - `aa854bd5`: recording recovery, playback rewind/retry, volume mitigation, diagnostics.
 - `59480856`: focused test runner and updated device acceptance instructions.
+- `7ee637b0`: ordinary explicit sends survive chat teardown; enqueue failures retain a recoverable draft.
 
 The implementation received independent reviews of recording lifecycle, playback
 recovery, draft persistence and duplicate sends, chat binding, and diagnostic I/O.
@@ -41,7 +42,8 @@ log rotation and failed I/O, and iPhone SDK typechecking of the Foundation helpe
 This runner creates temporary Swift caches, not a Bazel cache.
 
 Complete app compilation is tracked at
-https://github.com/n0vakovic/NanoVoice/actions/runs/38747601639 for source `59480856`.
+https://github.com/n0vakovic/NanoVoice/actions/runs/38748668351 for source `7ee637b0`.
+The earlier run was cancelled during preparation to include the send-lifetime fix.
 At the time this note was written it was running; do not infer success from this
 link. This is the public unsigned workflow using dummy credentials, not the private
 signed workflow or WarpBuild. An unsigned artifact cannot be installed as-is.
@@ -59,17 +61,22 @@ remain available even if that controller is destroyed.
 
 ## Reversal
 
-To reverse only the implementation while retaining history and these notes:
+To reverse the implementation and its test runner while retaining history and these notes:
 
 ```sh
+git revert 7ee637b0
+git revert 59480856
 git revert aa854bd5
 git revert 1bf5aaa9
 ```
 
 Those commands create new commits; they do not rewrite upstream or delete local
 data. Run from a clean checkout and resolve any future overlapping edits rather
-than forcing a reset. Documentation/test-runner changes can be reverted separately.
+than forcing a reset. These commands also return the focused test instructions to their previous state.
 For an exact source checkout of the previous state, use the rollback tag in a
 separate checkout. Reverting source does not downgrade an already installed app;
 that needs a signed build or the retained previous signed app. Do not uninstall the
 app to roll back: that can delete its locally saved drafts.
+
+A read-only reverse-patch check against the rollback tag passed, and the working
+tree was clean after committing the implementation.
