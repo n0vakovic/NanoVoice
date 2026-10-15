@@ -5,6 +5,7 @@ import Postbox
 import TelegramCore
 import SwiftSignalKit
 import TelegramPresentationData
+import PresentationDataUtils
 import AccountContext
 
 enum NanoVoiceChats {
@@ -14,6 +15,16 @@ enum NanoVoiceChats {
     static func peer(_ account: PeerId, _ index: Int) -> PeerId? {
         guard let value = UserDefaults.standard.string(forKey: key(account, index)), let id = Int64(value) else { return nil }
         return PeerId(id)
+    }
+    /// Stable IDs survive title changes. Only writable cloud conversations can be agent slots.
+    static func isEligible(_ peer: Peer, account: PeerId) -> Bool {
+        guard peer.id != account, !peer.isDeleted, canSendMessagesToPeer(EnginePeer(peer)) else { return false }
+        if let user = peer as? TelegramUser { return user.botInfo != nil }
+        if let group = peer as? TelegramGroup { return group.membership == .Member && group.migrationReference == nil }
+        if let channel = peer as? TelegramChannel, case .group = channel.info {
+            return channel.participationStatus == .member
+        }
+        return false
     }
     static func contains(_ peer: PeerId, account: PeerId) -> Bool {
         return titles.indices.contains { self.peer(account, $0) == peer }
@@ -60,25 +71,49 @@ final class NanoVoiceHomeController: ViewController, UITableViewDataSource, UITa
         table.frame = CGRect(x: 0, y: top, width: layout.size.width, height: layout.size.height - top)
     }
     @objc private func refresh() {
-        peers = NanoVoiceChats.titles.indices.map { NanoVoiceChats.peer(context.account.peerId, $0) }
-        statuses = peers.map { $0 == nil ? "Finding chat…" : "Open conversation" }
+        let saved = NanoVoiceChats.titles.indices.map { NanoVoiceChats.peer(context.account.peerId, $0) }
+        peers = [nil, nil]
+        statuses = ["Checking chat…", "Checking chat…"]
         table.reloadData()
         let signals = NanoVoiceChats.titles.map { title in
             context.account.postbox.searchPeers(query: NanoVoiceChats.normalized(title).components(separatedBy: " ").first ?? title)
         }
+        let cached = context.account.postbox.transaction { transaction -> [PeerId: Peer] in
+            var result: [PeerId: Peer] = [:]
+            for id in saved.compactMap({ $0 }) {
+                if let peer = transaction.getPeer(id) { result[id] = peer }
+            }
+            return result
+        }
         lookup?.dispose()
-        lookup = (combineLatest(signals) |> deliverOnMainQueue).start(next: { [weak self] results in
+        lookup = (combineLatest(cached, combineLatest(signals)) |> take(1) |> deliverOnMainQueue).start(next: { [weak self] cached, results in
             guard let self else { return }
             for index in NanoVoiceChats.titles.indices {
-                if self.peers[index] != nil { continue }
+                if let id = saved[index] {
+                    // Never silently replace an explicit binding because the peer is absent from
+                    // a local snapshot (e.g. during sync), renamed, deleted, or inaccessible.
+                    if let peer = cached[id], NanoVoiceChats.isEligible(peer, account: self.context.account.peerId),
+                       !self.peers.enumerated().contains(where: { $0.offset != index && $0.element == id }) {
+                        self.peers[index] = id
+                        self.statuses[index] = "Open conversation · ⓘ to change"
+                    } else {
+                        self.peers[index] = nil
+                        self.statuses[index] = "Saved chat unavailable — tap to select"
+                    }
+                    continue
+                }
                 let expected = NanoVoiceChats.normalized(NanoVoiceChats.titles[index])
-                let matches = results[index].compactMap(\.peer).filter { NanoVoiceChats.normalized($0.debugDisplayTitle) == expected }
+                let reserved = Set(saved.compactMap { $0 } + self.peers.compactMap { $0 })
+                let matches = results[index].compactMap(\.peer).filter {
+                    NanoVoiceChats.normalized($0.debugDisplayTitle) == expected &&
+                    NanoVoiceChats.isEligible($0, account: self.context.account.peerId) && !reserved.contains($0.id)
+                }
                 if matches.count == 1 {
                     self.peers[index] = matches[0].id
                     UserDefaults.standard.set(String(matches[0].id.toInt64()), forKey: NanoVoiceChats.key(self.context.account.peerId, index))
-                    self.statuses[index] = "Open conversation"
+                    self.statuses[index] = "Open conversation · ⓘ to change"
                 } else {
-                    self.statuses[index] = matches.isEmpty ? "Not found yet — tap Refresh" : "Multiple matches — needs selection"
+                    self.statuses[index] = matches.isEmpty ? "Not found — tap to select" : "Multiple matches — tap to select"
                 }
             }
             self.table.reloadData()
@@ -98,11 +133,40 @@ final class NanoVoiceHomeController: ViewController, UITableViewDataSource, UITa
         cell.detailTextLabel?.textColor = .secondaryLabel
         cell.imageView?.image = UIImage(systemName: indexPath.row == 0 ? "waveform.circle.fill" : "leaf.circle.fill")
         cell.imageView?.tintColor = .systemPurple
-        cell.accessoryType = peers[indexPath.row] == nil ? .none : .disclosureIndicator
+        cell.accessoryType = .detailButton
         return cell
     }
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        if let peer = peers[indexPath.row] { openChat(peer) }
+        if let peer = peers[indexPath.row] { openChat(peer) } else { selectChat(indexPath.row) }
+    }
+    func tableView(_ tableView: UITableView, accessoryButtonTappedForRowWith indexPath: IndexPath) {
+        selectChat(indexPath.row)
+    }
+
+    private func selectChat(_ index: Int) {
+        let otherIds = Set(NanoVoiceChats.titles.indices.filter { $0 != index }.compactMap {
+            NanoVoiceChats.peer(context.account.peerId, $0)
+        })
+        let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(
+            context: context,
+            filter: [.onlyWriteable, .excludeDisabled, .excludeSecretChats, .excludeChannels, .excludeSavedMessages, .excludeRecent, .doNotSearchMessages],
+            hasContactSelector: false,
+            hasGlobalSearch: false,
+            title: "Choose chat for \(NanoVoiceChats.titles[index])",
+            excludedPeerIds: otherIds
+        ))
+        controller.peerSelected = { [weak self, weak controller] peer, _ in
+            guard let self else { return }
+            guard NanoVoiceChats.isEligible(peer._asPeer(), account: self.context.account.peerId), !otherIds.contains(peer.id) else {
+                controller?.present(textAlertController(context: self.context, title: "Choose an agent conversation", text: "Select a bot or a group you can write to. Each agent needs a different chat.", actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]), in: .window(.root))
+                return
+            }
+            self.lookup?.dispose()
+            UserDefaults.standard.set(String(peer.id.toInt64()), forKey: NanoVoiceChats.key(self.context.account.peerId, index))
+            controller?.dismiss()
+            self.refresh()
+        }
+        push(controller)
     }
 }
