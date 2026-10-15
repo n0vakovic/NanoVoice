@@ -9,7 +9,7 @@ import AccountContext
 import OpusBinding
 
 /// A user-started, muted communication session. The input device stays running while
-/// waiting; only explicitly unmuted segments are encoded, and teardown discards drafts.
+/// waiting; only explicitly unmuted segments are encoded. Teardown retains unfinished recordings.
 final class WalkVoiceSession {
     static let activeAccount = ValuePromise<AccountRecordId?>(nil, ignoreRepeated: true)
     private let context: AccountContext
@@ -17,12 +17,18 @@ final class WalkVoiceSession {
     private var callObserver: Disposable?
     private var heartbeat: Foundation.Timer?
     private var engine: AVAudioEngine?
+    private var volumeObservation: NSKeyValueObservation?
     private var observers: [NSObjectProtocol] = []
     private let capture = WalkVoiceCapture()
     private var active = false
     private var installedTap = false
     private(set) var recording = false
-    private var limit: DispatchWorkItem?
+    private var recordingStartPending = false
+    private var recordingStartGeneration = 0
+    // Set before start for controlled comparison with the system default.
+    var minimizeReplyDucking = true
+    var beforeRecording: ((@escaping () -> Void) -> Void)?
+    var onInterruptedRecording: ((Data, Double) -> Void)?
     var onReady: (() -> Void)?
     var onRecording: ((Bool) -> Void)?
     var onMessage: ((Data, Double) -> Void)?
@@ -50,9 +56,10 @@ final class WalkVoiceSession {
 
     private func acquire() {
         lease = context.sharedContext.mediaManager.audioSession.push(audioSessionType: .voiceCall, outputMode: .speakerIfNoHeadphones, manualActivate: { [weak self] control in
-            control.setupAndActivate { _ in
+            control.setupAndActivate { state in
                 DispatchQueue.main.async {
                     guard let self, self.active else { return }
+                    self.onLog?("Audio session acquired: headset=\(state.isHeadsetConnected)")
                     self.runEngine()
                 }
             }
@@ -69,6 +76,9 @@ final class WalkVoiceSession {
             self.engine = engine
             let input = engine.inputNode
             try input.setVoiceProcessingEnabled(true)
+            // Replies use a separate renderer, so minimize their attenuation by voice processing.
+            // This is a mitigation to validate on device, not proof of the reported volume cause.
+            input.voiceProcessingOtherAudioDuckingConfiguration = AVAudioVoiceProcessingOtherAudioDuckingConfiguration(enableAdvancedDucking: false, duckingLevel: minimizeReplyDucking ? .min : .default)
             let format = input.outputFormat(forBus: 0)
             guard format.sampleRate > 0, format.channelCount > 0 else { throw WalkVoiceError.inputUnavailable }
             try capture.configure(format: format)
@@ -80,26 +90,39 @@ final class WalkVoiceSession {
                 self.applyMuted(AVAudioApplication.shared.isInputMuted)
             })
             observers.append(NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+                self?.logAudioState("interruption type=\(note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt ?? 0)")
                 if (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt) == AVAudioSession.InterruptionType.began.rawValue {
-                    self?.fail("Voice session interrupted; unfinished recording discarded.")
+                    self?.fail("Voice session interrupted; check saved Walk drafts.")
                 }
             })
             observers.append(NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] note in
+                self?.logAudioState("route change reason=\(note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0)")
                 if (note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue {
                     self?.fail("Headphones disconnected; Walk mode stopped.")
                 }
             })
             observers.append(NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+                self?.logAudioState("engine configuration changed")
                 self?.fail("Audio route changed; restart Walk mode.")
             })
+            volumeObservation = AVAudioSession.sharedInstance().observe(\.outputVolume, options: [.new]) { [weak self] _, _ in
+                DispatchQueue.main.async {
+                    guard let self, self.active else { return }
+                    self.logAudioState("system volume changed")
+                }
+            }
+            for (name, event) in [(UIApplication.didEnterBackgroundNotification, "entered background"), (UIApplication.willEnterForegroundNotification, "entered foreground")] {
+                observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.logAudioState(event) })
+            }
             engine.prepare()
             try engine.start()
             Self.activeAccount.set(context.account.id)
             heartbeat = Foundation.Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
                 guard let self, self.active else { return }
-                self.onLog?("Session heartbeat: engine=\(self.engine?.isRunning == true), background=\(UIApplication.shared.applicationState != .active), recording=\(self.recording)")
+                self.logAudioState("heartbeat")
+                if self.recording && self.capture.hasFailed { self.fail("Recording failed; the captured portion was kept as a Walk draft where possible.") }
             }
-            onLog?("Voice session active; input=\(AVAudioSession.sharedInstance().currentRoute.inputs.map(\.portName).joined(separator: ",")); muted")
+            logAudioState("ready")
             onReady?()
         } catch { fail("Unable to start voice session: \(error.localizedDescription)") }
     }
@@ -107,47 +130,85 @@ final class WalkVoiceSession {
     func toggleRecording() {
         guard #available(iOS 17.0, *), active, engine?.isRunning == true else { return }
         do {
-            let muted = recording
+            let muted = recording || recordingStartPending
             try AVAudioApplication.shared.setInputMuted(muted)
             applyMuted(muted)
         } catch { fail("Unable to change microphone state.") }
     }
 
     private func applyMuted(_ muted: Bool) {
-        guard active, engine?.isRunning == true, recording == muted else { return }
+        guard active, engine?.isRunning == true else { return }
         if muted {
+            let cancelledStart = recordingStartPending
+            recordingStartPending = false
+            recordingStartGeneration += 1
+            guard recording else {
+                if cancelledStart { onRecording?(false) }
+                return
+            }
             recording = false
-            limit?.cancel(); limit = nil
             let message = capture.finish()
+            let captureFailed = capture.hasFailed
+            if captureFailed {
+                if let (data, duration) = message, duration >= 0.5 { onInterruptedRecording?(data, duration) }
+                fail("Recording failed; check saved Walk drafts for the captured portion.")
+                return
+            }
             onRecording?(false)
             if let (data, duration) = message, duration >= 0.5 {
                 onLog?("Voice message captured: \(duration)s")
                 onMessage?(data, duration)
+            } else if message == nil {
+                fail("Unable to finish the recording. Check saved Walk drafts.")
+                return
             } else { onLog?("Short recording discarded") }
+            logAudioState("recording ended")
         } else {
-            guard capture.begin() else { fail("Unable to create voice message."); return }
-            recording = true
-            onRecording?(true)
-            onLog?("Voice recording started")
-            let work = DispatchWorkItem { [weak self] in
-                guard let self, self.recording else { return }
-                self.toggleRecording()
+            guard !recording, !recordingStartPending else { return }
+            recordingStartPending = true
+            recordingStartGeneration += 1
+            let generation = recordingStartGeneration
+            let begin: () -> Void = { [weak self] in
+                guard let self, self.active, self.recordingStartPending, self.recordingStartGeneration == generation, self.engine?.isRunning == true else { return }
+                self.recordingStartPending = false
+                guard self.capture.begin() else { self.fail("Unable to create voice message."); return }
+                self.recording = true
+                self.onRecording?(true)
+                self.logAudioState("recording started")
             }
-            limit = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 300, execute: work)
+            if let beforeRecording { beforeRecording(begin) } else { begin() }
         }
+    }
+
+    func logAudioState(_ event: String) {
+        let session = AVAudioSession.sharedInstance()
+        var processing = "unavailable"
+        if #available(iOS 17.0, *), let input = engine?.inputNode {
+            let ducking = input.voiceProcessingOtherAudioDuckingConfiguration
+            processing = "voiceProcessing=\(input.isVoiceProcessingEnabled) ducking=\(ducking.duckingLevel.rawValue) advancedDucking=\(ducking.enableAdvancedDucking) muted=\(AVAudioApplication.shared.isInputMuted)"
+        }
+        onLog?("Audio \(event): category=\(session.category.rawValue) mode=\(session.mode.rawValue) options=\(session.categoryOptions.rawValue) input=\(session.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")) output=\(session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")) volume=\(session.outputVolume) engine=\(engine?.isRunning == true) recording=\(recording) recordingStartPending=\(recordingStartPending) background=\(UIApplication.shared.applicationState != .active) \(processing)")
     }
 
     func stop() {
         guard active || lease != nil || engine != nil else { return }
+        logAudioState("stopping")
         active = false
+        recordingStartPending = false
+        recordingStartGeneration += 1
         callObserver?.dispose(); callObserver = nil
         heartbeat?.invalidate(); heartbeat = nil
-        limit?.cancel(); limit = nil
         for observer in observers { NotificationCenter.default.removeObserver(observer) }
         observers.removeAll()
-        capture.discard()
+        volumeObservation = nil
+        let wasRecording = recording
         recording = false
+        if wasRecording {
+            if let (data, duration) = capture.finish(), duration >= 0.5 {
+                onInterruptedRecording?(data, duration)
+                onLog?("Unfinished recording handed to draft recovery: \(duration)s")
+            } else { onLog?("Unable to retain recording: no recoverable audio") }
+        } else { capture.discard() }
         if installedTap { engine?.inputNode.removeTap(onBus: 0) }
         installedTap = false
         engine?.stop(); engine = nil
@@ -173,6 +234,11 @@ private final class WalkVoiceCapture {
     private var item: TGDataItem?
     private var pending = Data()
     private var failed = false
+
+    var hasFailed: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return failed
+    }
 
     func configure(format input: AVAudioFormat) throws {
         lock.lock(); defer { lock.unlock() }
@@ -212,13 +278,17 @@ private final class WalkVoiceCapture {
     func finish() -> (Data, Double)? {
         lock.lock(); defer { lock.unlock() }
         defer { writer = nil; item = nil; pending.removeAll() }
-        guard let writer, !failed else { return nil }
-        if !pending.isEmpty {
+        guard let writer else { return nil }
+        // A converter failure need not destroy already encoded audio. Finalize its prefix.
+        if !pending.isEmpty && pending.count < 1920 {
             pending.append(Data(count: 1920 - pending.count))
             let ok = pending.withUnsafeMutableBytes { writer.writeFrame($0.baseAddress!.assumingMemoryBound(to: UInt8.self), frameByteCount: 1920) }
-            guard ok else { return nil }
+            if !ok { failed = true }
         }
-        guard writer.writeFrame(nil, frameByteCount: 0), let data = item?.data() else { return nil }
+        if !writer.writeFrame(nil, frameByteCount: 0) { failed = true }
+        // Preserve encoded bytes even if finalization failed; callers must offer these
+        // as a recovery draft, never automatically send a potentially truncated file.
+        guard let data = item?.data(), !data.isEmpty else { return nil }
         return (data, writer.encodedDuration())
     }
     func discard() {

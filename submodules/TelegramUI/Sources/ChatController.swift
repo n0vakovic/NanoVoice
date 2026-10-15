@@ -8148,7 +8148,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        self.walkChatControls?.stop()
+        // Presenting a sheet (including draft recovery or diagnostics) must not
+        // terminate the hands-free session. Actual navigation away still ends it.
+        if self.isBeingDismissed || self.navigationController?.isBeingDismissed == true {
+            self.walkChatControls?.stop()
+        }
         
         if #available(iOS 18.0, *) {
         } else {
@@ -8228,6 +8232,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
         
     override public func viewWillLeaveNavigation() {
+        self.walkChatControls?.stop()
         self.chatDisplayNode.willNavigateAway()
     }
     
