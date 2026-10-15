@@ -41,12 +41,24 @@ delivery and progress policy, persistent/corrupt drafts, duplicate-send guards,
 log rotation and failed I/O, and iPhone SDK typechecking of the Foundation helpers.
 This runner creates temporary Swift caches, not a Bazel cache.
 
-Complete app compilation is tracked at
-https://github.com/n0vakovic/NanoVoice/actions/runs/38748668351 for source `7ee637b0`.
-The earlier run was cancelled during preparation to include the send-lifetime fix.
-At the time this note was written it was running; do not infer success from this
-link. This is the public unsigned workflow using dummy credentials, not the private
-signed workflow or WarpBuild. An unsigned artifact cannot be installed as-is.
+Complete app compilation **passed** at
+https://github.com/n0vakovic/NanoVoice/actions/runs/38748668351 for source
+`7ee637b09001052be5a21f2fcea4c268200d7aab`: 5,743 Bazel actions in 3,825.549 seconds.
+The output was downloaded temporarily and inspected: arm64 Mach-O executable,
+display name NanoVoice, bundle ID `local.milan.NanoVoice`, build 1007, no embedded
+provisioning profile. The temporary download was removed after inspection.
+
+- Artifact: `NanoVoice-unsigned-7`, retained by GitHub until October 22, 2026.
+- GitHub-reported artifact archive SHA-256:
+  `c47575300f68b69b50f6ed1f4c6052b960c817273d834cbd978d86314ea366a2`.
+- Computed inner IPA SHA-256:
+  `3f149b71577e8437dddad893abaffdefe116d40282c26fef9e349ed999695ecb`.
+
+This used the public unsigned workflow with dummy credentials, not the private
+signed workflow or WarpBuild. It did not recreate the local Bazel cache or change
+Keychain/authentication settings. The unsigned artifact is not installable as-is,
+and the installed phone app has not been changed. Subsequent commits only update
+this report; the compiled application source is unchanged.
 
 Hardware acceptance is listed in `Tests/WalkLive/README.md`. In particular, the
 new volume behavior, pause/output timing, locked-screen interruptions, and new UI
