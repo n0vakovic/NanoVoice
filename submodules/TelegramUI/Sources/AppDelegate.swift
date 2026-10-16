@@ -87,11 +87,10 @@ private func isKeyboardViewContainer(view: NSObject) -> Bool {
 }
 
 private class ApplicationStatusBarHost: StatusBarHost {
-    private weak var window: UIWindow?
-    private var scene: UIWindowScene? { self.window?.windowScene }
+    private weak var scene: UIWindowScene?
     
-    init(window: UIWindow) {
-        self.window = window
+    init(scene: UIWindowScene?) {
+        self.scene = scene
     }
     
     var isApplicationInForeground: Bool {
@@ -397,7 +396,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }
         
         let (window, hostView) = nativeWindowHostView()
-        let statusBarHost = ApplicationStatusBarHost(window: window)
+        let statusBarHost = ApplicationStatusBarHost(scene: window.windowScene)
         self.mainWindow = Window1(hostView: hostView, statusBarHost: statusBarHost)
         if let traitCollection = window.rootViewController?.traitCollection {
             if #available(iOS 13.0, *) {
@@ -781,11 +780,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         GlobalExperimentalSettings.isAppStoreBuild = buildConfig.isAppStoreBuild
         GlobalExperimentalSettings.enableFeed = false
         
-        // The scene delegate attaches and presents this window after launch.
-        // Background launches still initialize account and notification services.
-        if self.window?.windowScene != nil {
-            self.window?.makeKeyAndVisible()
-        }
+        self.window?.makeKeyAndVisible()
         
         var hasActiveCalls: Signal<Bool, NoError> = .single(false)
         if CallKitIntegration.isAvailable, let callKitIntegration = CallKitIntegration.shared {
@@ -3359,86 +3354,5 @@ final class UpdateSettings: Codable, Equatable {
     
     static func ==(lhs: UpdateSettings, rhs: UpdateSettings) -> Bool {
         return lhs.url == rhs.url
-    }
-}
-
-// NanoVoice has one application window. Keep the existing account/background
-// initialization in AppDelegate, and route scene events to its established handlers.
-@objc(NanoVoiceSceneDelegate)
-final class NanoVoiceSceneDelegate: UIResponder, UIWindowSceneDelegate {
-    var window: UIWindow?
-
-    @available(iOS 26.0, *)
-    func preferredWindowingControlStyle(for windowScene: UIWindowScene) -> UIWindowScene.WindowingControlStyle {
-        return .minimal
-    }
-
-    private var appDelegate: AppDelegate? {
-        return UIApplication.shared.delegate as? AppDelegate
-    }
-
-    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        guard let windowScene = scene as? UIWindowScene, let delegate = self.appDelegate, let window = delegate.window else {
-            return
-        }
-        self.window = window
-        window.windowScene = windowScene
-        window.frame = windowScene.coordinateSpace.bounds
-        window.makeKeyAndVisible()
-        self.scene(scene, openURLContexts: connectionOptions.urlContexts)
-        for activity in connectionOptions.userActivities {
-            self.scene(scene, continue: activity)
-        }
-        if let shortcut = connectionOptions.shortcutItem {
-            delegate.application(UIApplication.shared, performActionFor: shortcut, completionHandler: { _ in })
-        }
-    }
-
-    func sceneDidBecomeActive(_ scene: UIScene) {
-        self.appDelegate?.applicationDidBecomeActive(UIApplication.shared)
-    }
-
-    func sceneWillResignActive(_ scene: UIScene) {
-        self.appDelegate?.applicationWillResignActive(UIApplication.shared)
-    }
-
-    func sceneWillEnterForeground(_ scene: UIScene) {
-        self.appDelegate?.applicationWillEnterForeground(UIApplication.shared)
-    }
-
-    func sceneDidEnterBackground(_ scene: UIScene) {
-        self.appDelegate?.applicationDidEnterBackground(UIApplication.shared)
-    }
-
-    func sceneDidDisconnect(_ scene: UIScene) {
-        if self.window?.windowScene === scene {
-            self.window?.windowScene = nil
-        }
-        self.window = nil
-    }
-
-    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        for context in URLContexts {
-            var options: [UIApplication.OpenURLOptionsKey: Any] = [.openInPlace: context.options.openInPlace]
-            if let source = context.options.sourceApplication {
-                options[.sourceApplication] = source
-            }
-            if let annotation = context.options.annotation {
-                options[.annotation] = annotation
-            }
-            _ = self.appDelegate?.application(UIApplication.shared, open: context.url, options: options)
-        }
-    }
-
-    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-        _ = self.appDelegate?.application(UIApplication.shared, continue: userActivity, restorationHandler: { _ in })
-    }
-
-    func windowScene(_ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
-        guard let delegate = self.appDelegate else {
-            completionHandler(false)
-            return
-        }
-        delegate.application(UIApplication.shared, performActionFor: shortcutItem, completionHandler: completionHandler)
     }
 }

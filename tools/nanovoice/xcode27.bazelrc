@@ -1,6 +1,6 @@
 # Opt-in compatibility for Xcode 27; leaves all other diagnostics enabled.
 # Keep these new Swift diagnostics at warning level under upstream -warnings-as-errors.
-build:nanovoice_xcode27 '--copt=-Wno-error=#warnings'
+build:nanovoice_xcode27 --copt=-Wno-error=#warnings
 build:nanovoice_xcode27 --@build_bazel_rules_swift//swift:per_module_swiftcopt=@@//submodules/TelegramUI:TelegramUI=-Wwarning,NoUseUnstructuredThrowingTask
 build:nanovoice_xcode27 --@build_bazel_rules_swift//swift:per_module_swiftcopt=@@//submodules/AttachmentUI:AttachmentUI=-Wwarning,ImplicitStrongCapture
 build:nanovoice_xcode27 --@build_bazel_rules_swift//swift:per_module_swiftcopt=@@//submodules/AuthorizationUI:AuthorizationUI=-Wwarning,ImplicitStrongCapture

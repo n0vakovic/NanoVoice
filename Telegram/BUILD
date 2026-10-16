@@ -1569,23 +1569,6 @@ plist_fragment(
     extension = "plist",
     template = 
     """
-    <key>UIApplicationSceneManifest</key>
-    <dict>
-        <key>UIApplicationSupportsMultipleScenes</key>
-        <false/>
-        <key>UISceneConfigurations</key>
-        <dict>
-            <key>UIWindowSceneSessionRoleApplication</key>
-            <array>
-                <dict>
-                    <key>UISceneConfigurationName</key>
-                    <string>NanoVoice</string>
-                    <key>UISceneDelegateClassName</key>
-                    <string>NanoVoiceSceneDelegate</string>
-                </dict>
-            </array>
-        </dict>
-    </dict>
     <key>BGTaskSchedulerPermittedIdentifiers</key>
     <array>
         <string>{telegram_bundle_id}.refresh</string>
