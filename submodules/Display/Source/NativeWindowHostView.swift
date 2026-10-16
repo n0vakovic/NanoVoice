@@ -195,7 +195,7 @@ private final class WindowRootViewController: UIViewController, UIWindowSceneDel
             self._systemUserInterfaceStyle.set(.light)
         }
         
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene, windowScene.delegate == nil {
             windowScene.delegate = self
         }
     }
