@@ -28,13 +28,7 @@ SIGNING_IDENTITY='Apple Development: YOUR CERTIFICATE NAME' \
 BUILD_NUMBER=18 bash tools/nanovoice/build-device.sh
 ```
 
-The setup helper downloads/checks the pinned Bazel binary and generates ignored build inputs. It was used for the signed build 1008 below. Extensions and Watch app are excluded.
-
-### Xcode 27 compatibility
-
-The signed build 1008 compiled on Xcode 27.0 (27A266a) on 2026-10-16 using the real private configuration and existing development identity/profile. Install the matching Metal component with `xcodebuild -downloadComponent MetalToolchain` if absent. Pass `--config=nanovoice_xcode27` to `build-device.sh` on this toolchain. The opt-in configuration retains the new `ImplicitStrongCapture` diagnostic as a warning for the affected upstream modules, similarly retains `NoUseUnstructuredThrowingTask` for TelegramUI, and prevents the libc++ old-deployment-target preprocessor warning from becoming an error. Other diagnostics remain enabled. The explicit `EmptyInputView` import resolves a newly diagnosed ambiguity between two upstream keyboard modules. The Xcode 26 build configuration remains the default.
-
-Build 1008 passed deep/strict codesign verification and profile checks for the registered iPhone, then was installed in place and launched successfully. Its IPA SHA-256 is `28d9dd71f37f43e7c25257c73cec2f6f5c46c6310075a5c07addf3168421a300`. It contains the Walk reliability changes plus the explicit keyboard import. Device behavior still requires owner validation; preserve the build cache and build 17 rollback app until that validation arrives.
+The setup helper downloads/checks the pinned Bazel binary and generates ignored build inputs. It has been syntax-checked; a clean rebuild with this new helper has not yet been run. The underlying Bazel command produced the working build. Extensions and Watch app are excluded.
 
 Output: `bazel-bin/Telegram/Telegram_archive-root/Payload/Telegram.app`. Copy this outside Bazel's cache before retaining or re-signing it. Verify with `codesign --verify --deep --strict`, install with `xcrun devicectl device install app --device YOUR_DEVICE /path/to/NanoVoice.app`, then launch `local.milan.NanoVoice`. Use no demo arguments for the real account.
 
