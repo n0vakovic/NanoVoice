@@ -120,11 +120,10 @@ private class ApplicationStatusBarHost: StatusBarHost {
     }
     
     var keyboardWindow: UIWindow? {
-        if #available(iOS 16.0, *) {
-            return UIApplication.shared.internalGetKeyboard()
-        }
-        
-        for window in UIApplication.shared.windows {
+        // The private screen-based remote keyboard accessor traps with the
+        // scene lifecycle. Only use windows exposed by our own scene; if the
+        // system keyboard is not exposed, overlays use their normal parent view.
+        for window in self.scene?.windows ?? [] {
             if isKeyboardWindow(window: window) {
                 return window
             }
