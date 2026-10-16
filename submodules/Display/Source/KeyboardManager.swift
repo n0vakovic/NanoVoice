@@ -64,7 +64,6 @@ class KeyboardManager {
     
     func updateInteractiveInputOffset(_ offset: CGFloat, transition: ContainedViewLayoutTransition, completion: @escaping () -> Void) {
         guard let keyboardView = self.host.keyboardView else {
-            completion()
             return
         }
         
