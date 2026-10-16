@@ -10,7 +10,7 @@ The app is named NanoVoice with a purple/pink icon. The two conversation titles 
 
 ## Rebuilding on Apple Silicon
 
-The working device build used Xcode 26.6 / iOS SDK 26.5 and Bazel 8.4.2. Upstream `versions.json` still pins Xcode 26.2; the direct build below documents the tested override rather than changing the upstream pin. Install Xcode's Metal toolchain if requested. Clone recursively:
+The source is synchronized to official Telegram `f1dd7a2dbd02cbbf513e75d5695d8d36d1cf5838` (2026-10-07, app 13.0). Follow upstream `versions.json`: Xcode 26.6 and Bazel 9.2.0. The older working device build used Xcode 26.6 / iOS SDK 26.5 and Bazel 8.4.2; that does not establish validation of this updated base. Install Git LFS before checking out dependencies, and Xcode's Metal toolchain if requested. Clone recursively:
 
 ```sh
 git clone --recurse-submodules https://github.com/n0vakovic/NanoVoice.git
@@ -37,6 +37,8 @@ Credentials and signing files must never be committed. The inherited CI workflow
 ## Upstream updates and cleanup
 
 `origin` is the personal public repository; `upstream` is TelegramMessenger/Telegram-iOS. Fetch upstream and review/merge changes on a separate branch. The `nanovoice-v0.1.0` tag preserves the working milestone. Keep the upstream GPL license and attribution.
+
+The 2026-10-16 sync preserves Walk mode, recording/reply reliability fixes, diagnostics, agent-chat binding, and NanoVoice branding. Our temporary Xcode 27 warning overrides, keyboard workaround, and scene delegate have been reverted; lifecycle, keyboard lookup, rotation, and SDK compatibility now come from upstream. `nanovoice-before-upstream-sync-20261016` preserves the exact pre-sync source, including the uninstalled build 1010 keyboard workaround. Builds 1008 and 1009 crashed on launch and are not working rollback builds; retain the known-working build 17 app. Focused Walk tests pass after the merge; full build and hardware validation are separate checks.
 
 Bazel's output root is disposable and was approximately 25 GB. Preserve a signed app backup, private configuration/profile, and the signing key before deleting caches. Deleting these caches does not uninstall the app from the phone; the next build will be cold. Source and tests occupy less than 1 GB and are worth retaining.
 
