@@ -64,3 +64,10 @@ the startup observation interval (PID 41705, matching its installation path).
 The screenshot caught the app switcher, with NanoVoice showing the original two
 agents plus the new Relo entry. It does not establish full editing/reordering or
 Walk acceptance. Owner validation and disk cleanup remain pending.
+
+Milan confirmed functional behavior on build 1014, but flagged poor alignment in
+his screenshot. Build 1015 (2a01c48410) centers the title/preview block using font
+line heights, aligns separators to the text column, adds 16pt above the card, and
+sizes rows for Dynamic Type. It compiled, passed strict signature verification,
+and installed. Physical screenshot verification awaits phone unlock; cleanup is
+held until that verification finishes. Build 1014 remains the functional rollback.
