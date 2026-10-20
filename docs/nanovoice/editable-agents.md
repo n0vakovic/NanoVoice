@@ -34,3 +34,12 @@ its original bindings are untouched. Never uninstall the app to roll back.
 After install, try: add the new group, give it a name, reorder, reopen the app,
 rename, and remove/re-add. Check avatars/previews and the existing Walk loop.
 Do not remove build caches or the rollback app before Milan confirms acceptance.
+
+Build 1012 completed successfully on 2026-10-20: all 7,591 actions in 997 seconds.
+The focused agents and Walk regression checks passed. Strict deep codesign
+verification passed outside the sandbox; the embedded profile matches the phone.
+Verified arm64, display name NanoVoice, bundle `local.milan.NanoVoice`, version
+13.0 (1012). IPA SHA256:
+`301f1eb94f4897bac295307d1fa8b3c548b81cf1098e530ee87cb6008686f7bb`.
+The first install attempt was rejected by CoreDevice (4016, connection assertions
+unavailable); installation/device validation and owner acceptance remain pending.
