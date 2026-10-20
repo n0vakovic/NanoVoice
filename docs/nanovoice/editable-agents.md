@@ -55,3 +55,8 @@ entry. A call-site regression check now guards the minimum request count.
 Build 1013 compiled, signed, installed, and displayed the populated home screen.
 Screenshot inspection then found Telegram's custom navigation bar does not render
 the system Add item. Build 1014 uses an explicit Add text item instead.
+
+Build 1014 compiled successfully, passed strict deep signature verification, and
+installed in place. IPA SHA256:
+`b736192e292f73e88761825d813d43cb6173b39a01203d5fcb6a648b1f50f3f1`.
+The phone locked again before final launch verification; awaiting unlock.
