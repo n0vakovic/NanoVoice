@@ -59,4 +59,8 @@ the system Add item. Build 1014 uses an explicit Add text item instead.
 Build 1014 compiled successfully, passed strict deep signature verification, and
 installed in place. IPA SHA256:
 `b736192e292f73e88761825d813d43cb6173b39a01203d5fcb6a648b1f50f3f1`.
-The phone locked again before final launch verification; awaiting unlock.
+After phone unlock, build 1014 launched successfully and remained running after
+the startup observation interval (PID 41705, matching its installation path).
+The screenshot caught the app switcher, with NanoVoice showing the original two
+agents plus the new Relo entry. It does not establish full editing/reordering or
+Walk acceptance. Owner validation and disk cleanup remain pending.
