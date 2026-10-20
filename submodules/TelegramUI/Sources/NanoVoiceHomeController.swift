@@ -47,9 +47,14 @@ private final class NanoVoiceAgentCell: UITableViewCell {
     override func layoutSubviews() {
         super.layoutSubviews()
         avatar.frame = CGRect(x: 16, y: (contentView.bounds.height - 48) / 2, width: 48, height: 48)
-        let width = max(0, contentView.bounds.width - 92)
-        nameLabel.frame = CGRect(x: 76, y: 16, width: width, height: 25)
-        previewLabel.frame = CGRect(x: 76, y: 43, width: width, height: 23)
+        let textX: CGFloat = 76
+        let width = max(0, contentView.bounds.width - textX - 12)
+        let nameHeight = ceil(nameLabel.font.lineHeight)
+        let previewHeight = ceil(previewLabel.font.lineHeight)
+        let textY = floor((contentView.bounds.height - nameHeight - 4 - previewHeight) / 2)
+        nameLabel.frame = CGRect(x: textX, y: textY, width: width, height: nameHeight)
+        previewLabel.frame = CGRect(x: textX, y: textY + nameHeight + 4, width: width, height: previewHeight)
+        separatorInset = UIEdgeInsets(top: 0, left: contentView.frame.minX + textX, bottom: 0, right: 0)
     }
 }
 
@@ -81,7 +86,12 @@ final class NanoVoiceHomeController: ViewController, UITableViewDataSource, UITa
         self.displayNode.backgroundColor = .systemGroupedBackground
         table.dataSource = self
         table.delegate = self
-        table.rowHeight = 82
+        table.contentInsetAdjustmentBehavior = .never
+        table.tableHeaderView = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 16))
+        table.sectionHeaderHeight = 0
+        table.sectionFooterHeight = 0
+        table.estimatedSectionHeaderHeight = 0
+        table.estimatedSectionFooterHeight = 0
         table.allowsSelectionDuringEditing = true
         table.register(NanoVoiceAgentCell.self, forCellReuseIdentifier: "agent")
         self.displayNode.view.addSubview(table)
@@ -91,6 +101,7 @@ final class NanoVoiceHomeController: ViewController, UITableViewDataSource, UITa
         super.containerLayoutUpdated(layout, transition: transition)
         let top = self.navigationLayout(layout: layout).navigationFrame.maxY
         table.frame = CGRect(x: 0, y: top, width: layout.size.width, height: layout.size.height - top)
+        table.contentInset.bottom = layout.intrinsicInsets.bottom
     }
     private func updateButtons() {
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: table.isEditing ? "Done" : "Edit", style: .plain, target: self, action: #selector(toggleEditing))
@@ -134,6 +145,10 @@ final class NanoVoiceHomeController: ViewController, UITableViewDataSource, UITa
         agent.name ?? agent.peerId.flatMap { peers[$0]?.debugDisplayTitle } ?? "Agent"
     }
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { agents.count }
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        // Keep the two-line text block centered with the avatar, including larger text sizes.
+        max(76, ceil(UIFont.preferredFont(forTextStyle: .headline).lineHeight) + 4 + ceil(UIFont.preferredFont(forTextStyle: .subheadline).lineHeight) + 24)
+    }
     func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         if agents.isEmpty { return "Tap Add to choose an existing bot or group conversation." }
         return table.isEditing ? "Drag to reorder. Tap an agent to rename it. Removing an agent keeps its Telegram conversation." : nil
