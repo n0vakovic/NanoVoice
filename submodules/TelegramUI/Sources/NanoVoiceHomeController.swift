@@ -94,7 +94,7 @@ final class NanoVoiceHomeController: ViewController, UITableViewDataSource, UITa
     }
     private func updateButtons() {
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: table.isEditing ? "Done" : "Edit", style: .plain, target: self, action: #selector(toggleEditing))
-        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addAgent))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Add", style: .plain, target: self, action: #selector(addAgent))
     }
     @objc private func toggleEditing() {
         table.setEditing(!table.isEditing, animated: true)
