@@ -10,6 +10,14 @@ import PeerMessagesMediaPlaylist
 
 /// One explicit voice session owns capture, playback and the background connection.
 final class WalkChatControls: NSObject {
+    private static weak var activeSession: WalkChatControls?
+    static func isActive(account: PeerId, peer: PeerId) -> Bool {
+        guard let session = activeSession else { return false }
+        return session.context.account.peerId == account && session.peerId == peer && (session.enabled || session.starting)
+    }
+    static func stopActive(account: PeerId, peer: PeerId) {
+        if isActive(account: account, peer: peer) { activeSession?.stop() }
+    }
     private weak var controller: ChatControllerImpl?
     private let context: AccountContext
     private let peerId: EnginePeer.Id
@@ -98,6 +106,8 @@ final class WalkChatControls: NSObject {
 
     private func start() {
         guard !enabled, !starting else { return }
+        Self.activeSession?.stop()
+        Self.activeSession = self
         starting = true
         updateTitle()
         context.sharedContext.mediaManager.setPlaylist(nil, type: .voice, control: .playback(.pause))
@@ -191,6 +201,7 @@ final class WalkChatControls: NSObject {
     }
 
     func stop() {
+        if Self.activeSession === self { Self.activeSession = nil }
         if enabled || starting { log("Walk session stopped") }
         enabled = false
         starting = false

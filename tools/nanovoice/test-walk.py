@@ -13,6 +13,7 @@ def run(*args):
 with tempfile.TemporaryDirectory(prefix="nanovoice-checks-") as temp:
     scratch = Path(temp)
     for name, source, test in [
+        ("agents", "NanoVoiceAgentStore.swift", "Tests/NanoVoiceAgents/main.swift"),
         ("delivery", "WalkReplyGate.swift", "Tests/WalkLive/main.swift"),
         ("drafts", "WalkDraftStore.swift", "Tests/WalkDrafts/main.swift"),
         ("diagnostics", "WalkDiagnostics.swift", "Tests/WalkDiagnostics/main.swift"),
