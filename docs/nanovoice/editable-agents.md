@@ -42,4 +42,6 @@ Verified arm64, display name NanoVoice, bundle `local.milan.NanoVoice`, version
 13.0 (1012). IPA SHA256:
 `301f1eb94f4897bac295307d1fa8b3c548b81cf1098e530ee87cb6008686f7bb`.
 The first install attempt was rejected by CoreDevice (4016, connection assertions
-unavailable); installation/device validation and owner acceptance remain pending.
+unavailable). After reconnecting, build 1012 installed successfully in place.
+Startup verification is pending phone unlock (iOS denied launch because the device
+was locked); owner acceptance and cleanup remain pending.
