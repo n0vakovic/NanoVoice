@@ -71,3 +71,14 @@ line heights, aligns separators to the text column, adds 16pt above the card, an
 sizes rows for Dynamic Type. It compiled, passed strict signature verification,
 and installed. Physical screenshot verification awaits phone unlock; cleanup is
 held until that verification finishes. Build 1014 remains the functional rollback.
+
+
+Final verification: build 1015 launched and remained alive (PID 41741).
+The loaded device screenshot shows Edit/Add, all three agents, centered text,
+text-aligned separators, and the intended gap below navigation. Cleanup followed
+Milan's functional acceptance and this visual check: the Bazel server was stopped,
+its cache and generated build-input removed, and superseded builds 1011–1013
+removed. Kept source/Git, private rebuild/signing inputs, installed build 1015,
+and functionally confirmed build 1014 for immediate in-place rollback.
+The earlier 1011 artifact is now superseded; its source rollback tags remain.
+Next build number: 1016. Next compilation will be cold.
