@@ -1,7 +1,7 @@
 # Editable My Agents (2026-10-20)
 
 My Agents now stores an ordered, account-specific list of bot/group conversations.
-The + button opens Telegram's searchable local conversation picker, followed by an
+The Add button opens Telegram's searchable local conversation picker, followed by an
 optional NanoVoice-only name and Add confirmation. Edit enables drag reordering,
 renaming (blank uses Telegram's current name), and removal. Removal never deletes
 Telegram messages or leaves a group. An empty list stays empty after restart.
@@ -45,3 +45,13 @@ The first install attempt was rejected by CoreDevice (4016, connection assertion
 unavailable). After reconnecting, build 1012 installed successfully in place.
 Startup verification is pending phone unlock (iOS denied launch because the device
 was locked); owner acceptance and cleanup remain pending.
+
+
+Build 1012 crashed on startup: the new preview requested count 1 from Postbox,
+which computes halfLimit = count + 1 and requires halfLimit >= 3. The crash stack
+points directly to HistoryViewLoadedState's precondition. Fixed in e4172b29f1 by
+using the existing upstream convention of count 10, displaying only the newest
+entry. A call-site regression check now guards the minimum request count.
+Build 1013 compiled, signed, installed, and displayed the populated home screen.
+Screenshot inspection then found Telegram's custom navigation bar does not render
+the system Add item. Build 1014 uses an explicit Add text item instead.

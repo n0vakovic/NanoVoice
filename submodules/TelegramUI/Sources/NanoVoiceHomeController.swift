@@ -135,7 +135,7 @@ final class NanoVoiceHomeController: ViewController, UITableViewDataSource, UITa
     }
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { agents.count }
     func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        if agents.isEmpty { return "Tap + to add an existing bot or group conversation." }
+        if agents.isEmpty { return "Tap Add to choose an existing bot or group conversation." }
         return table.isEditing ? "Drag to reorder. Tap an agent to rename it. Removing an agent keeps its Telegram conversation." : nil
     }
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
