@@ -3,9 +3,17 @@
 from pathlib import Path
 import subprocess
 import tempfile
+import re
 
 root = Path(__file__).resolve().parents[2]
 sources = root / "submodules/TelegramUI/Sources"
+
+# Regression: a one-entry preview request compiles but crashes Postbox at runtime.
+# Check actual call sites, not a separate test-only copy of the request parameter.
+home = (sources / "NanoVoiceHomeController.swift").read_text()
+preview_counts = re.findall(r"aroundMessageHistoryViewForLocation\([^\n]*?count: (\d+)", home)
+assert preview_counts and all(int(count) >= 2 for count in preview_counts), "Postbox history previews require count >= 2"
+
 
 def run(*args):
     subprocess.run(args, cwd=root, check=True)

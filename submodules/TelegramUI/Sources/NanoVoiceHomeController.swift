@@ -117,7 +117,9 @@ final class NanoVoiceHomeController: ViewController, UITableViewDataSource, UITa
                 self.peers[id] = view.peers[peerId]
                 if !self.table.isEditing { self.table.reloadData() }
             }))
-            let history = context.account.postbox.aroundMessageHistoryViewForLocation(.peer(peerId: peerId, threadId: nil), anchor: .upperBound, ignoreMessagesInTimestampRange: nil, ignoreMessageIds: Set(), count: 1, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: Set(), tag: nil, appendMessagesFromTheSameGroup: false, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: [])
+            // Postbox requires count >= 2 (HistoryViewLoadedState halfLimit = count + 1 >= 3).
+            // Observe a small valid window, then display only its newest message.
+            let history = context.account.postbox.aroundMessageHistoryViewForLocation(.peer(peerId: peerId, threadId: nil), anchor: .upperBound, ignoreMessagesInTimestampRange: nil, ignoreMessageIds: Set(), count: 10, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: Set(), tag: nil, appendMessagesFromTheSameGroup: false, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: [])
             subscriptions.append((history |> deliverOnMainQueue).start(next: { [weak self] view, _, _ in
                 guard let self else { return }
                 let data = self.context.sharedContext.currentPresentationData.with { $0 }
