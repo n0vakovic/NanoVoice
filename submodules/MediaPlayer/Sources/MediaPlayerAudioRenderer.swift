@@ -789,7 +789,9 @@ private final class AudioPlayerRendererContext {
                                     
                                     let bytes = malloc(takeLength)!
                                     CMBlockBufferCopyDataBytes(dataBuffer, atOffset: 0, dataLength: takeLength, destination: bytes)
-                                    strongSelf.enqueueSamples(Data(bytesNoCopy: bytes.assumingMemoryBound(to: UInt8.self), count: takeLength, deallocator: .free), sampleIndex: bufferSampleIndex)
+                                    let decodedData = Data(bytesNoCopy: bytes.assumingMemoryBound(to: UInt8.self), count: takeLength, deallocator: .free)
+                                    strongSelf.diagnosticDecodedSamples(decodedData, sampleIndex: bufferSampleIndex)
+                                    strongSelf.enqueueSamples(decodedData, sampleIndex: bufferSampleIndex)
                                     
                                     if takeLength < dataLength {
                                         strongSelf.bufferContext.with { context in
@@ -830,7 +832,7 @@ private final class AudioPlayerRendererContext {
         }
     }
     
-    private func enqueueSamples(_ data: Data, sampleIndex: Int64) {
+    private func diagnosticDecodedSamples(_ data: Data, sampleIndex: Int64) {
         assert(audioPlayerRendererQueue.isCurrent())
         
         // This runs on the renderer's worker queue, never its realtime render callback.
@@ -840,6 +842,11 @@ private final class AudioPlayerRendererContext {
             let levels = nanoVoicePCMLevels(data)
             diagnosticSnapshot("decoded sampleIndex=\(sampleIndex) samples=\(levels.samples) rmsDBFS=\(levels.rmsDBFS) peakDBFS=\(levels.peakDBFS)")
         }
+    }
+
+    private func enqueueSamples(_ data: Data, sampleIndex: Int64) {
+        assert(audioPlayerRendererQueue.isCurrent())
+
         self.bufferContext.with { context in
             let bytesToCopy = min(context.buffer.size - context.buffer.availableBytes, data.count)
             data.withUnsafeBytes { buffer -> Void in
