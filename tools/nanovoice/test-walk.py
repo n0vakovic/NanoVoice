@@ -21,6 +21,7 @@ def run(*args):
 with tempfile.TemporaryDirectory(prefix="nanovoice-checks-") as temp:
     scratch = Path(temp)
     for name, source, test in [
+        ("audio-diagnostics", "../../TelegramAudio/Sources/NanoVoiceAudioDiagnostics.swift", "Tests/NanoVoiceAudioDiagnostics/main.swift"),
         ("agents", "NanoVoiceAgentStore.swift", "Tests/NanoVoiceAgents/main.swift"),
         ("delivery", "WalkReplyGate.swift", "Tests/WalkLive/main.swift"),
         ("drafts", "WalkDraftStore.swift", "Tests/WalkDrafts/main.swift"),
@@ -35,7 +36,7 @@ with tempfile.TemporaryDirectory(prefix="nanovoice-checks-") as temp:
         "-target", "arm64-apple-ios13.0", "-module-cache-path", str(scratch / "ios-cache"),
         *(str(sources / name) for name in ["WalkReplyGate.swift", "WalkDraftStore.swift", "WalkDiagnostics.swift"]))
     run("swiftc", "-frontend", "-parse", *(str(sources / name) for name in [
-        "WalkVoiceSession.swift", "WalkChatControls.swift", "NanoVoiceHomeController.swift", "ChatController.swift"
+        "WalkVoiceSession.swift", "WalkAudioDiagnosticsMonitor.swift", "WalkChatControls.swift", "NanoVoiceHomeController.swift", "ChatController.swift"
     ]))
 run("python3", "Tests/WalkLive/test_capture.py")
 run("git", "diff", "--check")

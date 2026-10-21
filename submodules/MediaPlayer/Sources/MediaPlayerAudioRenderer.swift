@@ -249,9 +249,25 @@ private final class AudioPlayerRendererContext {
     var soundMuted: Bool
     var ambient: Bool
     var volume: Double = 1.0
+    private let diagnosticLabel: String
+    private let diagnosticId = UUID().uuidString
+    private var lastDiagnosticSample: Double = -1
+
+    private func diagnosticSnapshot(_ event: String) {
+        guard NanoVoiceAudioDiagnostics.enabled else { return }
+        var mixer: AudioUnitParameterValue = -1
+        var eq: AudioUnitParameterValue = -999
+        let mixerStatus = mixerAudioUnit.map { AudioUnitGetParameter($0, kMultiChannelMixerParam_Volume, kAudioUnitScope_Input, 0, &mixer) } ?? OSStatus(-1)
+        let eqStatus = equalizerAudioUnit.map { AudioUnitGetParameter($0, kAUNBandEQParam_GlobalGain, kAudioUnitScope_Global, 0, &eq) } ?? OSStatus(-1)
+        var running = DarwinBoolean(false)
+        let graphStatus = audioGraph.map { AUGraphIsRunning($0, &running) } ?? OSStatus(-1)
+        NanoVoiceAudioDiagnostics.emit("Renderer \(diagnosticId) \(diagnosticLabel) \(event) requestedGain=\(volume) mixerGain=\(mixer) mixerReadStatus=\(mixerStatus) eqDB=\(eq) eqReadStatus=\(eqStatus) voiceMessage=\(forAudioVideoMessage) speaker=\(forceAudioToSpeaker) muted=\(soundMuted) ambient=\(ambient) playAndRecord=\(playAndRecord) voiceProcessingIO=\(useVoiceProcessingMode) paused=\(paused) rate=\(baseRate) graphRunning=\(running.boolValue) graphStatus=\(graphStatus)")
+    }
+
     let mixWithOthers: Bool
     var forceAudioToSpeaker: Bool {
         didSet {
+            defer { diagnosticSnapshot("speaker override updated") }
             if self.forceAudioToSpeaker != oldValue {
                 if let audioSessionControl = self.audioSessionControl {
                     audioSessionControl.setOutputMode(self.forceAudioToSpeaker ? .speakerIfNoHeadphones : .system)
@@ -263,9 +279,10 @@ private final class AudioPlayerRendererContext {
         }
     }
     
-    init(controlTimebase: CMTimebase, audioSession: MediaPlayerAudioSessionControl, forAudioVideoMessage: Bool, playAndRecord: Bool, useVoiceProcessingMode: Bool, soundMuted: Bool, ambient: Bool, mixWithOthers: Bool, forceAudioToSpeaker: Bool, baseRate: Double, audioLevelPipe: ValuePipe<Float>, updatedRate: @escaping () -> Void, audioPaused: @escaping () -> Void) {
+    init(controlTimebase: CMTimebase, audioSession: MediaPlayerAudioSessionControl, forAudioVideoMessage: Bool, playAndRecord: Bool, useVoiceProcessingMode: Bool, soundMuted: Bool, ambient: Bool, mixWithOthers: Bool, forceAudioToSpeaker: Bool, baseRate: Double, audioLevelPipe: ValuePipe<Float>, diagnosticLabel: String = "unattributed", updatedRate: @escaping () -> Void, audioPaused: @escaping () -> Void) {
         assert(audioPlayerRendererQueue.isCurrent())
         
+        self.diagnosticLabel = diagnosticLabel
         self.audioSession = audioSession
         self.forAudioVideoMessage = forAudioVideoMessage
         self.forceAudioToSpeaker = forceAudioToSpeaker
@@ -330,6 +347,7 @@ private final class AudioPlayerRendererContext {
     }
     
     fileprivate func setVolume(_ volume: Double) {
+        defer { diagnosticSnapshot("setVolume") }
         self.volume = volume
         
         if let mixerAudioUnit = self.mixerAudioUnit {
@@ -360,6 +378,7 @@ private final class AudioPlayerRendererContext {
     }
     
     fileprivate func setSoundMuted(soundMuted: Bool) {
+        defer { diagnosticSnapshot("mute updated") }
         self.soundMuted = soundMuted
         
         if let mixerAudioUnit = self.mixerAudioUnit {
@@ -412,6 +431,7 @@ private final class AudioPlayerRendererContext {
     }
     
     fileprivate func start() {
+        defer { diagnosticSnapshot("start") }
         assert(audioPlayerRendererQueue.isCurrent())
         
         if self.paused {
@@ -421,6 +441,7 @@ private final class AudioPlayerRendererContext {
     }
     
     fileprivate func stop() {
+        diagnosticSnapshot("stop requested")
         assert(audioPlayerRendererQueue.isCurrent())
         
         if !self.paused {
@@ -494,6 +515,7 @@ private final class AudioPlayerRendererContext {
     }
     
     private func startAudioUnit() {
+        defer { diagnosticSnapshot("graph start completed") }
         assert(audioPlayerRendererQueue.isCurrent())
         
         if self.audioGraph == nil {
@@ -671,6 +693,7 @@ private final class AudioPlayerRendererContext {
     }
     
     private func closeAudioUnit() {
+        diagnosticSnapshot("graph close requested")
         assert(audioPlayerRendererQueue.isCurrent())
         
         if let audioGraph = self.audioGraph {
@@ -810,6 +833,13 @@ private final class AudioPlayerRendererContext {
     private func enqueueSamples(_ data: Data, sampleIndex: Int64) {
         assert(audioPlayerRendererQueue.isCurrent())
         
+        // This runs on the renderer's worker queue, never its realtime render callback.
+        // Sample at most one short PCM window per two seconds; never retain audio.
+        if NanoVoiceAudioDiagnostics.enabled && ProcessInfo.processInfo.systemUptime - lastDiagnosticSample >= 2 {
+            lastDiagnosticSample = ProcessInfo.processInfo.systemUptime
+            let levels = nanoVoicePCMLevels(data)
+            diagnosticSnapshot("decoded sampleIndex=\(sampleIndex) samples=\(levels.samples) rmsDBFS=\(levels.rmsDBFS) peakDBFS=\(levels.peakDBFS)")
+        }
         self.bufferContext.with { context in
             let bytesToCopy = min(context.buffer.size - context.buffer.availableBytes, data.count)
             data.withUnsafeBytes { buffer -> Void in
@@ -875,7 +905,7 @@ public final class MediaPlayerAudioRenderer {
     private let audioClock: CMClock
     public let audioTimebase: CMTimebase
     
-    public init(audioSession: MediaPlayerAudioSessionControl, forAudioVideoMessage: Bool = false, playAndRecord: Bool, useVoiceProcessingMode: Bool = false, soundMuted: Bool, ambient: Bool, mixWithOthers: Bool, forceAudioToSpeaker: Bool, baseRate: Double, audioLevelPipe: ValuePipe<Float>, updatedRate: @escaping () -> Void, audioPaused: @escaping () -> Void) {
+    public init(audioSession: MediaPlayerAudioSessionControl, forAudioVideoMessage: Bool = false, playAndRecord: Bool, useVoiceProcessingMode: Bool = false, soundMuted: Bool, ambient: Bool, mixWithOthers: Bool, forceAudioToSpeaker: Bool, baseRate: Double, audioLevelPipe: ValuePipe<Float>, diagnosticLabel: String = "unattributed", updatedRate: @escaping () -> Void, audioPaused: @escaping () -> Void) {
         var audioClock: CMClock?
         CMAudioClockCreate(allocator: nil, clockOut: &audioClock)
         if audioClock == nil {
@@ -892,7 +922,7 @@ public final class MediaPlayerAudioRenderer {
         self.audioTimebase = audioTimebase!
         
         audioPlayerRendererQueue.async {
-            let context = AudioPlayerRendererContext(controlTimebase: audioTimebase!, audioSession: audioSession, forAudioVideoMessage: forAudioVideoMessage, playAndRecord: playAndRecord, useVoiceProcessingMode: useVoiceProcessingMode, soundMuted: soundMuted, ambient: ambient, mixWithOthers: mixWithOthers, forceAudioToSpeaker: forceAudioToSpeaker, baseRate: baseRate, audioLevelPipe: audioLevelPipe, updatedRate: updatedRate, audioPaused: audioPaused)
+            let context = AudioPlayerRendererContext(controlTimebase: audioTimebase!, audioSession: audioSession, forAudioVideoMessage: forAudioVideoMessage, playAndRecord: playAndRecord, useVoiceProcessingMode: useVoiceProcessingMode, soundMuted: soundMuted, ambient: ambient, mixWithOthers: mixWithOthers, forceAudioToSpeaker: forceAudioToSpeaker, baseRate: baseRate, audioLevelPipe: audioLevelPipe, diagnosticLabel: diagnosticLabel, updatedRate: updatedRate, audioPaused: audioPaused)
             self.contextRef = Unmanaged.passRetained(context)
         }
     }

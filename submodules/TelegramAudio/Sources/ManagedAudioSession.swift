@@ -892,6 +892,8 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
     }
     
     private func applyNone() {
+        NanoVoiceAudioDiagnostics.emit("Manager applyNone begin")
+        defer { NanoVoiceAudioDiagnostics.emit("Manager applyNone end category=\(AVAudioSession.sharedInstance().category.rawValue) mode=\(AVAudioSession.sharedInstance().mode.rawValue)") }
         self.deactivateTimer?.invalidate()
         self.deactivateTimer = nil
         
@@ -929,6 +931,8 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
     }
     
     private func setup(type: ManagedAudioSessionType, outputMode: AudioSessionOutputMode, activateNow: Bool) {
+        NanoVoiceAudioDiagnostics.emit("Manager setup type=\(type) activateNow=\(activateNow)")
+        defer { NanoVoiceAudioDiagnostics.emit("Manager setup end category=\(AVAudioSession.sharedInstance().category.rawValue) mode=\(AVAudioSession.sharedInstance().mode.rawValue) options=\(AVAudioSession.sharedInstance().categoryOptions.rawValue)") }
         self.deactivateTimer?.invalidate()
         self.deactivateTimer = nil
         
@@ -1204,6 +1208,7 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
     }
     
     private func activate() {
+        NanoVoiceAudioDiagnostics.emit("Manager activate requested")
         if let (type, outputMode) = self.currentTypeAndOutputMode {
             do {
                 let startTime = CFAbsoluteTimeGetCurrent()

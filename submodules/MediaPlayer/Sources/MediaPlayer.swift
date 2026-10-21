@@ -147,6 +147,7 @@ private final class MediaPlayerContext {
     private var lastStatusUpdateTimestamp: Double?
     private let playerStatus: Promise<MediaPlayerStatus>
     private let playerStatusValue = Atomic<MediaPlayerStatus?>(value: nil)
+    private let diagnosticLabel: String
     private let audioLevelPipe: ValuePipe<Float>
     
     fileprivate var actionAtEnd: MediaPlayerActionAtEnd = .stop
@@ -165,6 +166,7 @@ private final class MediaPlayerContext {
         self.userLocation = userLocation
         self.userContentType = userContentType
         self.resourceReference = resourceReference
+        self.diagnosticLabel = "player=\(UUID().uuidString) media=\(String(UInt(bitPattern: resourceReference.resource.id.stringRepresentation.hashValue), radix: 16)) source=\(externalAudioSession == nil ? "managed" : "custom")"
         self.tempFilePath = tempFilePath
         self.limitedFileRange = limitedFileRange
         self.streamable = streamable
@@ -410,7 +412,7 @@ private final class MediaPlayerContext {
                 self.audioRenderer = nil
                 
                 let queue = self.queue
-                renderer = MediaPlayerAudioRenderer(audioSession: self.externalAudioSession ?? .manager(self.audioSessionManager), forAudioVideoMessage: self.isAudioVideoMessage, playAndRecord: self.playAndRecord, soundMuted: self.soundMuted, ambient: self.ambient, mixWithOthers: self.mixWithOthers, forceAudioToSpeaker: self.forceAudioToSpeaker, baseRate: self.baseRate, audioLevelPipe: self.audioLevelPipe, updatedRate: { [weak self] in
+                renderer = MediaPlayerAudioRenderer(audioSession: self.externalAudioSession ?? .manager(self.audioSessionManager), forAudioVideoMessage: self.isAudioVideoMessage, playAndRecord: self.playAndRecord, soundMuted: self.soundMuted, ambient: self.ambient, mixWithOthers: self.mixWithOthers, forceAudioToSpeaker: self.forceAudioToSpeaker, baseRate: self.baseRate, audioLevelPipe: self.audioLevelPipe, diagnosticLabel: self.diagnosticLabel, updatedRate: { [weak self] in
                     queue.async {
                         if let strongSelf = self {
                             strongSelf.tick()
@@ -493,7 +495,7 @@ private final class MediaPlayerContext {
                 self.lastStatusUpdateTimestamp = nil
                 if self.enableSound {
                     let queue = self.queue
-                    let renderer = MediaPlayerAudioRenderer(audioSession: self.externalAudioSession ?? .manager(self.audioSessionManager), forAudioVideoMessage: self.isAudioVideoMessage, playAndRecord: self.playAndRecord, soundMuted: self.soundMuted, ambient: self.ambient, mixWithOthers: self.mixWithOthers, forceAudioToSpeaker: self.forceAudioToSpeaker, baseRate: self.baseRate, audioLevelPipe: self.audioLevelPipe, updatedRate: { [weak self] in
+                    let renderer = MediaPlayerAudioRenderer(audioSession: self.externalAudioSession ?? .manager(self.audioSessionManager), forAudioVideoMessage: self.isAudioVideoMessage, playAndRecord: self.playAndRecord, soundMuted: self.soundMuted, ambient: self.ambient, mixWithOthers: self.mixWithOthers, forceAudioToSpeaker: self.forceAudioToSpeaker, baseRate: self.baseRate, audioLevelPipe: self.audioLevelPipe, diagnosticLabel: self.diagnosticLabel, updatedRate: { [weak self] in
                         queue.async {
                             if let strongSelf = self {
                                 strongSelf.tick()

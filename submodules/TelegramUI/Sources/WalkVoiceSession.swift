@@ -12,6 +12,7 @@ import OpusBinding
 /// waiting; only explicitly unmuted segments are encoded. Teardown retains unfinished recordings.
 final class WalkVoiceSession {
     static let activeAccount = ValuePromise<AccountRecordId?>(nil, ignoreRepeated: true)
+    private let traceId = UUID()
     private let context: AccountContext
     private var lease: Disposable?
     private var callObserver: Disposable?
@@ -41,6 +42,8 @@ final class WalkVoiceSession {
     func start() {
         guard #available(iOS 17.0, *) else { onError?("Walk voice sessions require iOS 17 or later."); return }
         guard !context.sharedContext.immediateHasOngoingCall else { onError?("End the current call before starting Walk mode."); return }
+        WalkAudioDiagnosticsMonitor.shared.begin(traceId)
+        logAudioState("start requested id=\(traceId)")
         active = true
         callObserver = (context.sharedContext.hasOngoingCall.get() |> deliverOnMainQueue).start(next: { [weak self] ongoing in
             if ongoing { self?.fail("A call started; Walk mode stopped.") }
@@ -55,6 +58,7 @@ final class WalkVoiceSession {
     }
 
     private func acquire() {
+        logAudioState("lease requested id=\(traceId)")
         lease = context.sharedContext.mediaManager.audioSession.push(audioSessionType: .voiceCall, outputMode: .speakerIfNoHeadphones, manualActivate: { [weak self] control in
             control.setupAndActivate { state in
                 DispatchQueue.main.async {
@@ -185,7 +189,7 @@ final class WalkVoiceSession {
         var processing = "unavailable"
         if #available(iOS 17.0, *), let input = engine?.inputNode {
             let ducking = input.voiceProcessingOtherAudioDuckingConfiguration
-            processing = "voiceProcessing=\(input.isVoiceProcessingEnabled) ducking=\(ducking.duckingLevel.rawValue) advancedDucking=\(ducking.enableAdvancedDucking) muted=\(AVAudioApplication.shared.isInputMuted)"
+            processing = "voiceProcessing=\(input.isVoiceProcessingEnabled) bypass=\(input.isVoiceProcessingBypassed) agc=\(input.isVoiceProcessingAGCEnabled) ducking=\(ducking.duckingLevel.rawValue) advancedDucking=\(ducking.enableAdvancedDucking) muted=\(AVAudioApplication.shared.isInputMuted)"
         }
         onLog?("Audio \(event): category=\(session.category.rawValue) mode=\(session.mode.rawValue) options=\(session.categoryOptions.rawValue) input=\(session.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")) output=\(session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")) volume=\(session.outputVolume) engine=\(engine?.isRunning == true) recording=\(recording) recordingStartPending=\(recordingStartPending) background=\(UIApplication.shared.applicationState != .active) \(processing)")
     }
@@ -211,10 +215,14 @@ final class WalkVoiceSession {
         } else { capture.discard() }
         if installedTap { engine?.inputNode.removeTap(onBus: 0) }
         installedTap = false
-        engine?.stop(); engine = nil
+        engine?.stop()
+        logAudioState("engine stopped id=\(traceId)")
+        engine = nil
         if #available(iOS 17.0, *) { try? AVAudioApplication.shared.setInputMuted(false) }
         Self.activeAccount.set(nil)
         lease?.dispose(); lease = nil
+        logAudioState("lease disposal queued id=\(traceId)")
+        WalkAudioDiagnosticsMonitor.shared.end(traceId)
     }
 
     private func fail(_ message: String) {

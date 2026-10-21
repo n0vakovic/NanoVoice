@@ -250,6 +250,9 @@ final class WalkChatControls: NSObject {
         if ((try? draftStore.hasDrafts()) ?? true) || !draftStore.unsaved.isEmpty {
             sheet.addAction(UIAlertAction(title: "Recover recordings", style: .default, handler: { [weak self] _ in self?.recoverDrafts() }))
         }
+        sheet.addAction(UIAlertAction(title: "Mark audio too quiet", style: .default, handler: { _ in
+            WalkAudioDiagnosticsMonitor.shared.markQuiet()
+        }))
         sheet.addAction(UIAlertAction(title: "Share diagnostics", style: .default, handler: { [weak self] _ in
             guard let self else { return }
             let urls = WalkDiagnostics.exportURLs()
