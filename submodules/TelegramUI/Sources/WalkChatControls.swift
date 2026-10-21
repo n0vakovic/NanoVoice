@@ -330,11 +330,12 @@ final class WalkChatControls: NSObject {
         |> filter { $0.complete } |> take(1) |> deliverOnMainQueue).start(next: { [weak self] _ in
             guard let self, self.enabled, self.attemptId == token, self.current == id else { return }
             self.cancelDownload()
-            self.log("Audio downloaded")
+            self.log("Audio downloaded voiceMessage=\(file.isVoice)")
+            // Match ordinary Telegram voice playback; retain normal treatment for music/audio files.
             let player = MediaPlayer(audioSessionManager: self.context.sharedContext.mediaManager.audioSession, externalAudioSession: .custom { control in
                 control.activate()
                 return EmptyDisposable
-            }, postbox: self.context.account.postbox, userLocation: .peer(self.peerId), userContentType: .audio, resourceReference: FileMediaReference.message(message: MessageReference(message), media: file).resourceReference(file.resource), streamable: .none, video: false, preferSoftwareDecoding: false, enableSound: true, fetchAutomatically: false, playAndRecord: true)
+            }, postbox: self.context.account.postbox, userLocation: .peer(self.peerId), userContentType: .audio, resourceReference: FileMediaReference.message(message: MessageReference(message), media: file).resourceReference(file.resource), streamable: .none, video: false, preferSoftwareDecoding: false, enableSound: true, fetchAutomatically: false, playAndRecord: true, isAudioVideoMessage: file.isVoice)
             self.replyPlayer = player
             self.latestPlayerState = nil
             self.playerWantsPlayback = false

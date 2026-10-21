@@ -1,10 +1,10 @@
 # Audio diagnostics v2
 
-Purpose: investigate quiet Walk replies, especially after restarting Walk, without
-changing gain, ducking, routing, activation, or playback behavior.
+Purpose: investigate quiet Walk replies, especially after restarting Walk, with passive instrumentation. The subsequent owner-approved playback change is
+described below; routing, ducking, and session activation behavior remain unchanged.
 
 Independent review found an important confounder: ordinary voice playback passes
-isAudioVideoMessage=true; Walk currently leaves it false. Telegram's renderer can
+isAudioVideoMessage=true; Walk previously left it false. Telegram's renderer can
 apply +12 dB EQ to voice messages (+5 dB on some subsequent route overrides).
 This may explain a baseline difference, but not by itself sudden quietness after
 restart. Voice-processing attenuation and session reconfiguration remain hypotheses.
@@ -42,5 +42,10 @@ recorded even if the tracing window has expired, with that state made explicit.
 
 Checks: focused gate-expiry/restart/reentrancy and signed PCM level tests, existing
 Walk regression suite, independent read-only source review, and full iPhone build.
-No actual gain/ducking fix is included. Rollback source tag:
+After reviewing this finding, Milan explicitly requested the same voice-message
+boost. Walk now passes isAudioVideoMessage: file.isVoice, matching ordinary
+Telegram voice classification. This delegates EQ treatment to the upstream renderer
+rather than hardcoding another gain; music/audio files keep their normal treatment.
+It addresses the concrete configuration mismatch, not a proven restart/ducking bug.
+Rollback source tag:
 `nanovoice-before-audio-diagnostics-20261021`.
